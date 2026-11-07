@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">我们</string>
+    <color name="window_background">#FFF8F4</color>
+    <color name="ic_launcher_background">#FFEDE7</color>
+</resources>

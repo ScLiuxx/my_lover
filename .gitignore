@@ -1,0 +1,18 @@
+*.iml
+.gradle
+/local.properties
+local.properties
+/.idea
+.DS_Store
+/build
+/app/build
+/captures
+.externalNativeBuild
+.cxx
+
+# backend
+server/.venv
+server/data
+server/*.log
+server/server.pid
+__pycache__
