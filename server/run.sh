@@ -4,7 +4,7 @@ set -e
 cd "$(dirname "$0")"
 unset LD_LIBRARY_PATH
 
-PORT="${PORT:-8000}"
+PORT="${PORT:-80}"
 PY=".venv/bin/python"
 LOG="server.log"
 PID_FILE="server.pid"

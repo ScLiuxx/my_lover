@@ -258,7 +258,7 @@ class LoveStore(private val prefs: SharedPreferences) {
     // ---- 云同步 ----
 
     private var _syncServer by mutableStateOf(
-        prefs.getString(KEY_SYNC_SERVER, "http://172.31.8.211:8000")!!
+        prefs.getString(KEY_SYNC_SERVER, "http://123.249.80.35")!!
     )
     var syncServer: String
         get() = _syncServer
