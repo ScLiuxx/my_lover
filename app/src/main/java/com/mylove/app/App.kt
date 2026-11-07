@@ -18,6 +18,8 @@ import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.mylove.app.data.LoveStore
 import com.mylove.app.notify.LoveNotifications
+import com.mylove.app.notify.PartnerPollScheduler
+import com.mylove.app.notify.PartnerSync
 import com.mylove.app.ui.LoveBackground
 import com.mylove.app.ui.LoveBottomBar
 import com.mylove.app.ui.GuideOverlay
@@ -27,6 +29,8 @@ import com.mylove.app.ui.screens.CalendarScreen
 import com.mylove.app.ui.screens.MeScreen
 import com.mylove.app.ui.screens.TogetherScreen
 import com.mylove.app.ui.screens.UsScreen
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
 fun MyLoveApp() {
@@ -57,6 +61,19 @@ fun MyLoveApp() {
                 LoveNotifications.update(context, store)
             } else {
                 LoveNotifications.cancel(context)
+            }
+        }
+
+        LaunchedEffect(store.notificationsEnabled, store.syncToken) {
+            PartnerPollScheduler.update(
+                context,
+                store.notificationsEnabled && store.syncToken.isNotBlank()
+            )
+        }
+
+        LaunchedEffect(store.notificationsEnabled, store.syncToken) {
+            if (store.notificationsEnabled && store.syncToken.isNotBlank()) {
+                withContext(Dispatchers.IO) { PartnerSync.check(context) }
             }
         }
 

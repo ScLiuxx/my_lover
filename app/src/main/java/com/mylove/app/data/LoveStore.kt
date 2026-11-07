@@ -512,6 +512,7 @@ class LoveStore(private val prefs: SharedPreferences) {
             put("daily", JSONObject().put(meKey, dailyAnswer))
             put("quiz", JSONObject().put(meKey, JSONObject(myQuizAnswers)))
             put("love_note", loveNote)
+            put("love_note_by", meKey)
         }
     }
 
