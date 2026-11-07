@@ -28,6 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -43,6 +44,7 @@ import com.kyant.backdrop.Backdrop
 import com.kyant.shapes.Capsule
 import com.mylove.app.data.LoveStore
 import com.mylove.app.data.PetCatalog
+import com.mylove.app.data.QuizQuestion
 import com.mylove.app.data.QuizQuestions
 import com.mylove.app.data.cnShort
 import com.mylove.app.data.daysTogether
@@ -787,87 +789,205 @@ private fun FoodDialog(onDismiss: () -> Unit) {
 @Composable
 private fun QuizDialog(store: LoveStore, onDismiss: () -> Unit) {
     val colors = LocalLoveColors.current
+    var editing by remember { mutableStateOf(false) }
     var answers by remember { mutableStateOf(store.myQuizAnswers) }
+    val allQuestions = QuizQuestions + store.customQuestions + store.partnerCustomQuestions
     val partnerAnswers = store.partnerQuizAnswers
     val score = quizScore(answers, partnerAnswers)
 
     LoveDialog(onDismiss = onDismiss) {
-        DialogTitle("默契问答")
-        Spacer(Modifier.height(6.dp))
-        DialogBody("凭直觉选出你觉得 TA 会选的那个，同步后自动算出默契度。")
-        Spacer(Modifier.height(12.dp))
-        Column(
-            Modifier
-                .heightIn(max = 360.dp)
-                .verticalScroll(rememberScrollState())
-        ) {
-            QuizQuestions.forEach { question ->
-                Text(
-                    text = question.title,
-                    color = colors.text,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium
-                )
-                Spacer(Modifier.height(6.dp))
-                question.options.forEachIndexed { index, option ->
-                    val value = index.toString()
-                    val selected = answers[question.id] == value
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 3.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(
-                                if (selected) colors.accentSoft
-                                else colors.stroke.copy(alpha = 0.3f)
-                            )
-                            .clickable { answers = answers + (question.id to value) }
-                            .padding(horizontal = 12.dp, vertical = 9.dp)
-                    ) {
-                        Text(
-                            text = option,
-                            color = if (selected) colors.accent else colors.textSecondary,
-                            fontSize = 13.sp
-                        )
-                    }
+        if (editing) {
+            QuizEditor(
+                onCancel = { editing = false },
+                onSave = { question ->
+                    store.saveCustomQuestions(store.customQuestions + question)
+                    editing = false
                 }
-                Spacer(Modifier.height(10.dp))
-            }
-        }
-        if (score != null) {
-            Text(
-                text = "当前默契度 $score 分",
-                color = colors.accent,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold
             )
-        } else if (partnerAnswers.isEmpty()) {
-            Text(
-                text = "TA 还没作答，先保存你的答案",
-                color = colors.textTertiary,
-                fontSize = 11.sp
-            )
-        }
-        Spacer(Modifier.height(14.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            GlassButton(
-                backdrop = rememberDialogBackdrop(),
-                onClick = onDismiss,
-                modifier = Modifier.weight(1f)
+        } else {
+            DialogTitle("默契问答")
+            Spacer(Modifier.height(6.dp))
+            DialogBody("凭直觉选出你觉得 TA 会选的那个，同步后自动算出默契度。")
+            Spacer(Modifier.height(12.dp))
+            Column(
+                Modifier
+                    .heightIn(max = 340.dp)
+                    .verticalScroll(rememberScrollState())
             ) {
-                Text("取消", color = colors.textSecondary, fontSize = 14.sp)
+                allQuestions.forEach { question ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = question.title,
+                            color = colors.text,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (store.customQuestions.any { it.id == question.id }) {
+                            Text(
+                                text = "删除",
+                                color = colors.textTertiary,
+                                fontSize = 11.sp,
+                                modifier = Modifier
+                                    .clickable {
+                                        store.saveCustomQuestions(
+                                            store.customQuestions.filterNot { it.id == question.id }
+                                        )
+                                    }
+                                    .padding(start = 8.dp)
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    question.options.forEachIndexed { index, option ->
+                        val value = index.toString()
+                        val selected = answers[question.id] == value
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 3.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(
+                                    if (selected) colors.accentSoft
+                                    else colors.stroke.copy(alpha = 0.3f)
+                                )
+                                .clickable { answers = answers + (question.id to value) }
+                                .padding(horizontal = 12.dp, vertical = 9.dp)
+                        ) {
+                            Text(
+                                text = option,
+                                color = if (selected) colors.accent else colors.textSecondary,
+                                fontSize = 13.sp
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                }
+                Text(
+                    text = "＋ 自定义题目",
+                    color = colors.accent,
+                    fontSize = 13.sp,
+                    modifier = Modifier
+                        .clickable { editing = true }
+                        .padding(vertical = 6.dp)
+                )
             }
-            GlassButton(
-                backdrop = rememberDialogBackdrop(),
-                onClick = {
-                    store.saveMyQuiz(answers)
-                    onDismiss()
-                },
+            if (score != null) {
+                Text(
+                    text = "当前默契度 $score 分",
+                    color = colors.accent,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            } else if (partnerAnswers.isEmpty()) {
+                Text(
+                    text = "TA 还没作答，先保存你的答案",
+                    color = colors.textTertiary,
+                    fontSize = 11.sp
+                )
+            }
+            Spacer(Modifier.height(14.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                GlassButton(
+                    backdrop = rememberDialogBackdrop(),
+                    onClick = onDismiss,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("取消", color = colors.textSecondary, fontSize = 14.sp)
+                }
+                GlassButton(
+                    backdrop = rememberDialogBackdrop(),
+                    onClick = {
+                        store.saveMyQuiz(answers)
+                        onDismiss()
+                    },
+                    modifier = Modifier.weight(1f),
+                    tint = colors.accent
+                ) {
+                    Text("保存", color = Color.White, fontSize = 14.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuizEditor(
+    onCancel: () -> Unit,
+    onSave: (QuizQuestion) -> Unit
+) {
+    val colors = LocalLoveColors.current
+    var title by remember { mutableStateOf("") }
+    val options = remember { mutableStateListOf("", "") }
+    val valid = title.isNotBlank() && options.count { it.isNotBlank() } >= 2
+
+    DialogTitle("自定义题目")
+    Spacer(Modifier.height(6.dp))
+    DialogBody("题目和选项会同步给 TA，你们回答同一套题。")
+    Spacer(Modifier.height(12.dp))
+    LoveTextField(
+        value = title,
+        onValueChange = { title = it },
+        placeholder = "例如：TA 最怕什么？"
+    )
+    Spacer(Modifier.height(8.dp))
+    options.forEachIndexed { index, option ->
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            LoveTextField(
+                value = option,
+                onValueChange = { options[index] = it },
                 modifier = Modifier.weight(1f),
-                tint = colors.accent
-            ) {
-                Text("保存", color = Color.White, fontSize = 14.sp)
+                placeholder = "选项 ${index + 1}"
+            )
+            if (options.size > 2) {
+                Text(
+                    text = "×",
+                    color = colors.textTertiary,
+                    fontSize = 16.sp,
+                    modifier = Modifier
+                        .clickable { options.removeAt(index) }
+                        .padding(start = 8.dp)
+                )
             }
+        }
+        Spacer(Modifier.height(8.dp))
+    }
+    if (options.size < 4) {
+        Text(
+            text = "＋ 添加选项",
+            color = colors.accent,
+            fontSize = 13.sp,
+            modifier = Modifier
+                .clickable { options.add("") }
+                .padding(vertical = 4.dp)
+        )
+    }
+    Spacer(Modifier.height(14.dp))
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        GlassButton(
+            backdrop = rememberDialogBackdrop(),
+            onClick = onCancel,
+            modifier = Modifier.weight(1f)
+        ) {
+            Text("取消", color = colors.textSecondary, fontSize = 14.sp)
+        }
+        GlassButton(
+            backdrop = rememberDialogBackdrop(),
+            enabled = valid,
+            onClick = {
+                val cleaned = options.map { it.trim() }.filter { it.isNotBlank() }
+                onSave(
+                    QuizQuestion(
+                        id = "c_${System.currentTimeMillis()}",
+                        title = title.trim(),
+                        options = cleaned
+                    )
+                )
+            },
+            modifier = Modifier.weight(1f),
+            tint = colors.accent
+        ) {
+            Text("保存", color = Color.White, fontSize = 14.sp)
         }
     }
 }

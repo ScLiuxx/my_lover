@@ -5,6 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import org.json.JSONArray
 import org.json.JSONObject
 import java.time.LocalDate
 import java.time.MonthDay
@@ -46,6 +47,8 @@ private const val KEY_ACTION_DATE = "action_date"
 private const val KEY_TOUCH = "touch_count"
 private const val KEY_PLAY = "play_count"
 private const val KEY_TASK_REWARD = "task_reward_date"
+private const val KEY_CUSTOM_QUESTIONS = "custom_questions"
+private const val KEY_PERIOD_PASSWORD = "period_password"
 
 /**
  * 极简本地状态：所有字段直接写入 SharedPreferences，够原型使用。
@@ -334,6 +337,33 @@ class LoveStore(private val prefs: SharedPreferences) {
         prefs.edit().putString(KEY_PERIOD_STARTS, "").apply()
     }
 
+    private var _periodPassword by mutableStateOf(prefs.getString(KEY_PERIOD_PASSWORD, "")!!)
+    var periodPassword: String
+        get() = _periodPassword
+        set(value) {
+            _periodPassword = value
+            prefs.edit().putString(KEY_PERIOD_PASSWORD, value).apply()
+        }
+
+    private fun periodPayload(): JSONObject = JSONObject().apply {
+        put("starts", JSONArray(periodStarts.map { it.toEpochDay() }))
+        put("cycle", cycleLength)
+        put("period", periodLength)
+        put("updated", System.currentTimeMillis())
+    }
+
+    private fun applyPeriodPayload(json: JSONObject) {
+        json.optJSONArray("starts")?.let { array ->
+            val days = (0 until array.length()).mapNotNull { index ->
+                runCatching { LocalDate.ofEpochDay(array.getLong(index)) }.getOrNull()
+            }
+            _periodStartsRaw = days.distinct().sorted().joinToString(",") { it.toEpochDay().toString() }
+            prefs.edit().putString(KEY_PERIOD_STARTS, _periodStartsRaw).apply()
+        }
+        json.optInt("cycle", 0).takeIf { it in 20..45 }?.let { cycleLength = it }
+        json.optInt("period", 0).takeIf { it in 2..10 }?.let { periodLength = it }
+    }
+
     private var _cycleLength by mutableIntStateOf(prefs.getInt(KEY_CYCLE, 28))
     var cycleLength: Int
         get() = _cycleLength
@@ -362,6 +392,17 @@ class LoveStore(private val prefs: SharedPreferences) {
 
     private var _partnerQuizRaw by mutableStateOf("")
     val partnerQuizAnswers: Map<String, String> get() = parseQuiz(_partnerQuizRaw)
+
+    private var _customQuestionsRaw by mutableStateOf(prefs.getString(KEY_CUSTOM_QUESTIONS, "[]")!!)
+    val customQuestions: List<QuizQuestion> get() = decodeQuestions(_customQuestionsRaw)
+
+    fun saveCustomQuestions(questions: List<QuizQuestion>) {
+        _customQuestionsRaw = encodeQuestions(questions)
+        prefs.edit().putString(KEY_CUSTOM_QUESTIONS, _customQuestionsRaw).apply()
+    }
+
+    private var _partnerCustomRaw by mutableStateOf("[]")
+    val partnerCustomQuestions: List<QuizQuestion> get() = decodeQuestions(_partnerCustomRaw)
 
     // ---- 对方数据（云同步后可见）----
 
@@ -511,8 +552,12 @@ class LoveStore(private val prefs: SharedPreferences) {
             put("moods", JSONObject().put(meKey, myMood ?: JSONObject.NULL))
             put("daily", JSONObject().put(meKey, dailyAnswer))
             put("quiz", JSONObject().put(meKey, JSONObject(myQuizAnswers)))
+            put("quiz_custom", JSONObject().put(meKey, JSONArray(encodeQuestions(customQuestions))))
             put("love_note", loveNote)
             put("love_note_by", meKey)
+            PeriodCrypto.encrypt(periodPassword, periodPayload().toString(), syncCoupleId)?.let {
+                put("period_enc", it)
+            }
         }
     }
 
@@ -562,6 +607,16 @@ class LoveStore(private val prefs: SharedPreferences) {
 
         state.optJSONObject("quiz")?.optJSONObject(partnerKey)?.let { partnerQuiz ->
             _partnerQuizRaw = partnerQuiz.toString()
+        }
+
+        state.optJSONObject("quiz_custom")?.optJSONArray(partnerKey)?.let { partnerCustom ->
+            _partnerCustomRaw = partnerCustom.toString()
+        }
+
+        state.optString("period_enc").takeIf { it.isNotBlank() }?.let { encrypted ->
+            PeriodCrypto.decrypt(periodPassword, encrypted, syncCoupleId)?.let { plain ->
+                runCatching { applyPeriodPayload(JSONObject(plain)) }
+            }
         }
 
         state.optString("love_note").takeIf { it.isNotBlank() }?.let { loveNote = it }

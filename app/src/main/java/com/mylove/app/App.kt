@@ -73,7 +73,9 @@ fun MyLoveApp() {
 
         LaunchedEffect(store.notificationsEnabled, store.syncToken) {
             if (store.notificationsEnabled && store.syncToken.isNotBlank()) {
-                withContext(Dispatchers.IO) { PartnerSync.check(context) }
+                withContext(Dispatchers.IO) {
+                    runCatching { PartnerSync.check(context) }
+                }
             }
         }
 

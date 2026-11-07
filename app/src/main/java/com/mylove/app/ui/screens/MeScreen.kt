@@ -81,6 +81,7 @@ fun MeScreen(
     var editingAnniversary by remember { mutableStateOf(false) }
     var editingMyBirthday by remember { mutableStateOf(false) }
     var editingPartnerBirthday by remember { mutableStateOf(false) }
+    var showCrashLog by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     var notificationMessage by remember { mutableStateOf<String?>(null) }
@@ -514,6 +515,8 @@ fun MeScreen(
                 InfoRow("界面", "Liquid Glass · Backdrop")
                 HairLine(Modifier.padding(vertical = 10.dp))
                 InfoRow("数据", "只保存在本机")
+                HairLine(Modifier.padding(vertical = 10.dp))
+                EditableInfoRow("崩溃日志", "查看") { showCrashLog = true }
                 Spacer(Modifier.height(16.dp))
                 GlassButton(
                     backdrop = backdrop,
@@ -612,6 +615,36 @@ fun MeScreen(
                 editingPartnerBirthday = false
             }
         )
+    }
+
+    if (showCrashLog) {
+        val crash = remember {
+            runCatching {
+                java.io.File(context.filesDir, "last_crash.txt").readText()
+            }.getOrNull()
+        }
+        LoveDialog(onDismiss = { showCrashLog = false }) {
+            DialogTitle("崩溃日志")
+            Spacer(Modifier.height(6.dp))
+            if (crash.isNullOrBlank()) {
+                DialogBody("没有记录到崩溃。")
+            } else {
+                Text(
+                    text = crash.takeLast(1500),
+                    color = colors.textSecondary,
+                    fontSize = 11.sp,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                )
+            }
+            Spacer(Modifier.height(14.dp))
+            GlassButton(
+                backdrop = rememberDialogBackdrop(),
+                onClick = { showCrashLog = false },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("关闭", color = colors.accent, fontSize = 13.sp)
+            }
+        }
     }
 }
 

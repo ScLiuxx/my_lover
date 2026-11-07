@@ -47,6 +47,7 @@ import com.mylove.app.ui.GlassPill
 import com.mylove.app.ui.HairLine
 import com.mylove.app.ui.LocalLoveColors
 import com.mylove.app.ui.LoveDialog
+import com.mylove.app.ui.LoveTextField
 import com.mylove.app.ui.PageHeader
 import com.mylove.app.ui.rememberDialogBackdrop
 import java.time.LocalDate
@@ -276,6 +277,15 @@ private fun PeriodCard(
         }
         Spacer(Modifier.height(8.dp))
         Text(
+            text = when {
+                store.periodPassword.isBlank() -> "未设置口令 · 数据不会上传"
+                store.isSynced -> "已加密同步 · 两台设备口令一致即可查看"
+                else -> "已设置口令 · 云同步后双方可见"
+            },
+            color = colors.textTertiary,
+            fontSize = 11.sp
+        )
+        Text(
             text = "预测仅供参考，不构成医疗建议",
             color = colors.textTertiary,
             fontSize = 11.sp
@@ -307,11 +317,12 @@ private fun CycleSettingsDialog(store: LoveStore, onDismiss: () -> Unit) {
     val colors = LocalLoveColors.current
     var cycle by remember { mutableIntStateOf(store.cycleLength) }
     var period by remember { mutableIntStateOf(store.periodLength) }
+    var password by remember { mutableStateOf(store.periodPassword) }
 
     LoveDialog(onDismiss = onDismiss) {
         DialogTitle("周期设置")
         Spacer(Modifier.height(6.dp))
-        DialogBody("按自己的规律调整，预测会更准确。")
+        DialogBody("按自己的规律调整。设置隐私口令后，生理期数据会加密上传，两台设备口令一致才能查看。")
         Spacer(Modifier.height(16.dp))
         AdjustRow(
             label = "周期长度",
@@ -325,6 +336,24 @@ private fun CycleSettingsDialog(store: LoveStore, onDismiss: () -> Unit) {
             value = "$period 天",
             onMinus = { period = (period - 1).coerceAtLeast(2) },
             onPlus = { period = (period + 1).coerceAtMost(10) }
+        )
+        Spacer(Modifier.height(14.dp))
+        Text(
+            text = "隐私口令",
+            color = colors.textSecondary,
+            fontSize = 12.sp
+        )
+        Spacer(Modifier.height(6.dp))
+        LoveTextField(
+            value = password,
+            onValueChange = { password = it },
+            placeholder = "两台设备要填一样的口令"
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = "口令只保存在本机，服务器拿到的是密文",
+            color = colors.textTertiary,
+            fontSize = 11.sp
         )
         Spacer(Modifier.height(18.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -343,6 +372,7 @@ private fun CycleSettingsDialog(store: LoveStore, onDismiss: () -> Unit) {
                 onClick = {
                     store.cycleLength = cycle
                     store.periodLength = period
+                    store.periodPassword = password.trim()
                     onDismiss()
                 },
                 modifier = Modifier.weight(1f),

@@ -1,5 +1,6 @@
 package com.mylove.app.data
 
+import org.json.JSONArray
 import org.json.JSONObject
 
 data class QuizQuestion(
@@ -36,4 +37,39 @@ fun quizScore(mine: Map<String, String>, partner: Map<String, String>): Int? {
     if (common.isEmpty()) return null
     val hits = common.count { mine[it] == partner[it] }
     return hits * 100 / common.size
+}
+
+fun encodeQuestions(questions: List<QuizQuestion>): String {
+    val array = JSONArray()
+    questions.forEach { question ->
+        array.put(
+            JSONObject().apply {
+                put("id", question.id)
+                put("title", question.title)
+                put("options", JSONArray(question.options))
+            }
+        )
+    }
+    return array.toString()
+}
+
+fun decodeQuestions(raw: String): List<QuizQuestion> {
+    if (raw.isBlank()) return emptyList()
+    return runCatching {
+        val array = JSONArray(raw)
+        (0 until array.length()).mapNotNull { index ->
+            val obj = array.optJSONObject(index) ?: return@mapNotNull null
+            val id = obj.optString("id")
+            val title = obj.optString("title")
+            val optionsArray = obj.optJSONArray("options") ?: return@mapNotNull null
+            val options = (0 until optionsArray.length())
+                .map { optionsArray.optString(it) }
+                .filter { it.isNotBlank() }
+            if (id.isBlank() || title.isBlank() || options.size < 2) {
+                null
+            } else {
+                QuizQuestion(id, title, options)
+            }
+        }
+    }.getOrDefault(emptyList())
 }
