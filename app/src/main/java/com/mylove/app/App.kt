@@ -5,6 +5,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -16,6 +17,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.mylove.app.data.LoveStore
+import com.mylove.app.notify.LoveNotifications
 import com.mylove.app.ui.LoveBackground
 import com.mylove.app.ui.LoveBottomBar
 import com.mylove.app.ui.MyLoveTheme
@@ -41,7 +43,22 @@ fun MyLoveApp() {
         else -> systemDark
     }
 
-    MyLoveTheme(darkTheme = dark) {
+    MyLoveTheme(darkTheme = dark, paletteId = store.paletteId) {
+        LaunchedEffect(
+            store.notificationsEnabled,
+            store.petType,
+            store.petLevel,
+            store.missMe,
+            store.missTa,
+            store.isConfigured
+        ) {
+            if (store.notificationsEnabled) {
+                LoveNotifications.update(context, store)
+            } else {
+                LoveNotifications.cancel(context)
+            }
+        }
+
         if (!store.isConfigured) {
             Box(Modifier.fillMaxSize()) {
                 val backgroundBackdrop = rememberLayerBackdrop { drawContent() }

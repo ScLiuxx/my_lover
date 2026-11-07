@@ -1,5 +1,10 @@
 package com.mylove.app.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -13,8 +18,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -26,13 +34,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import com.kyant.backdrop.Backdrop
 import com.kyant.shapes.Capsule
 import com.mylove.app.data.LoveStore
 import com.mylove.app.data.SyncClient
+import com.mylove.app.notify.LoveNotifications
 import com.mylove.app.data.cnDate
 import com.mylove.app.data.cnShort
 import com.mylove.app.data.daysTogether
@@ -45,6 +56,7 @@ import com.mylove.app.ui.GlassCard
 import com.mylove.app.ui.HairLine
 import com.mylove.app.ui.LocalLoveColors
 import com.mylove.app.ui.LoveDialog
+import com.mylove.app.ui.LovePalettes
 import com.mylove.app.ui.LoveTextField
 import com.mylove.app.ui.MonthDayDialog
 import com.mylove.app.ui.PageHeader
@@ -70,6 +82,19 @@ fun MeScreen(
     var editingMyBirthday by remember { mutableStateOf(false) }
     var editingPartnerBirthday by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    var notificationMessage by remember { mutableStateOf<String?>(null) }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            store.notificationsEnabled = true
+            LoveNotifications.update(context, store)
+            notificationMessage = "已开启实况通知"
+        } else {
+            notificationMessage = "没有拿到通知权限，可以在系统设置里开启"
+        }
+    }
 
     LazyColumn(
         modifier = modifier
@@ -172,12 +197,138 @@ fun MeScreen(
                         }
                     }
                 }
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    text = "配色",
+                    color = colors.text,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    LovePalettes.forEach { palette ->
+                        val selected = store.paletteId == palette.id
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(
+                                    if (selected) colors.accentSoft
+                                    else colors.stroke.copy(alpha = 0.35f)
+                                )
+                                .then(
+                                    if (selected) {
+                                        Modifier.border(
+                                            1.dp,
+                                            colors.accent,
+                                            RoundedCornerShape(14.dp)
+                                        )
+                                    } else {
+                                        Modifier
+                                    }
+                                )
+                                .clickable { store.paletteId = palette.id }
+                                .padding(vertical = 8.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Box(
+                                Modifier
+                                    .size(16.dp)
+                                    .clip(CircleShape)
+                                    .background(palette.light.accent)
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = palette.name,
+                                color = if (selected) colors.accent else colors.textSecondary,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                }
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    text = "深色模式下的玻璃面板会换成暖棕底色",
+                    text = "配色会同时影响背景光斑、卡片和强调色",
                     color = colors.textTertiary,
                     fontSize = 11.sp
                 )
+            }
+        }
+        item {
+            GlassCard(
+                backdrop = backdrop,
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(20.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "实况通知",
+                        color = colors.text,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Box(
+                        Modifier
+                            .clip(Capsule())
+                            .background(
+                                if (store.notificationsEnabled) colors.accentSoft
+                                else colors.stroke.copy(alpha = 0.4f)
+                            )
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = if (store.notificationsEnabled) "已开启" else "未开启",
+                            color = if (store.notificationsEnabled) colors.accent else colors.textTertiary,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "在通知栏常驻显示在一起的天数和小宠物状态；Android 16 上会以实况通知（Live Updates）呈现。",
+                    color = colors.textTertiary,
+                    fontSize = 12.sp,
+                    lineHeight = 18.sp
+                )
+                Spacer(Modifier.height(12.dp))
+                GlassButton(
+                    backdrop = backdrop,
+                    onClick = {
+                        if (store.notificationsEnabled) {
+                            store.notificationsEnabled = false
+                            LoveNotifications.cancel(context)
+                            notificationMessage = "已关闭实况通知"
+                        } else if (
+                            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                            ContextCompat.checkSelfPermission(
+                                context,
+                                Manifest.permission.POST_NOTIFICATIONS
+                            ) != PackageManager.PERMISSION_GRANTED
+                        ) {
+                            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        } else {
+                            store.notificationsEnabled = true
+                            LoveNotifications.update(context, store)
+                            notificationMessage = "已开启实况通知"
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = if (store.notificationsEnabled) "关闭通知" else "开启通知",
+                        color = colors.accent,
+                        fontSize = 13.sp
+                    )
+                }
+                if (notificationMessage != null) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = notificationMessage!!,
+                        color = colors.textTertiary,
+                        fontSize = 11.sp
+                    )
+                }
             }
         }
         item {

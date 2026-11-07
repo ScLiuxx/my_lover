@@ -34,6 +34,9 @@ private const val KEY_SYNC_TOKEN = "sync_token"
 private const val KEY_SYNC_COUPLE = "sync_couple"
 private const val KEY_SYNC_CODE = "sync_code"
 private const val KEY_SYNC_ROLE = "sync_role"
+private const val KEY_PALETTE = "palette"
+private const val KEY_PET_TYPE = "pet_type"
+private const val KEY_NOTIFY = "notify_enabled"
 
 /**
  * 极简本地状态：所有字段直接写入 SharedPreferences，够原型使用。
@@ -96,6 +99,32 @@ class LoveStore(private val prefs: SharedPreferences) {
         set(value) {
             _themeMode = value
             prefs.edit().putInt(KEY_THEME_MODE, value).apply()
+        }
+
+    private var _paletteId by mutableStateOf(prefs.getString(KEY_PALETTE, "warm")!!)
+    var paletteId: String
+        get() = _paletteId
+        set(value) {
+            _paletteId = value
+            prefs.edit().putString(KEY_PALETTE, value).apply()
+        }
+
+    private var _petType by mutableStateOf(prefs.getString(KEY_PET_TYPE, "fox")!!)
+    var petType: String
+        get() = _petType
+        set(value) {
+            _petType = value
+            prefs.edit().putString(KEY_PET_TYPE, value).apply()
+        }
+
+    val petSpec: PetSpec get() = petById(petType)
+
+    private var _notificationsEnabled by mutableStateOf(prefs.getBoolean(KEY_NOTIFY, false))
+    var notificationsEnabled: Boolean
+        get() = _notificationsEnabled
+        set(value) {
+            _notificationsEnabled = value
+            prefs.edit().putBoolean(KEY_NOTIFY, value).apply()
         }
 
     private var _configured by mutableStateOf(prefs.getBoolean(KEY_CONFIGURED, false))
@@ -211,15 +240,8 @@ class LoveStore(private val prefs: SharedPreferences) {
             prefs.edit().putLong(KEY_LAST_OPEN, value).apply()
         }
 
-    val petLevel: Int get() = (growth / 20) + 1
-    val petForm: String
-        get() = when (petLevel) {
-            1 -> "小狐狸"
-            2 -> "小毛球"
-            3 -> "小老虎"
-            4 -> "小狐狸"
-            else -> "大狐狸"
-        }
+    val petLevel: Int get() = (growth / 20).coerceIn(0, 5) + 1
+    val petForm: String get() = petSpec.form
     val feedLimit: Int get() = 3
     val feedLeft: Int get() = (feedLimit - feedUsed).coerceAtLeast(0)
 

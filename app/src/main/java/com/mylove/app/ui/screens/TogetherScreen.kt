@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -38,6 +39,7 @@ import androidx.compose.ui.unit.sp
 import com.kyant.backdrop.Backdrop
 import com.kyant.shapes.Capsule
 import com.mylove.app.data.LoveStore
+import com.mylove.app.data.PetCatalog
 import com.mylove.app.data.cnShort
 import com.mylove.app.data.daysTogether
 import com.mylove.app.data.formatAgo
@@ -232,6 +234,7 @@ private fun DailyQuestionCard(
 @Composable
 private fun PetCard(store: LoveStore, backdrop: Backdrop) {
     val colors = LocalLoveColors.current
+    var showPetPicker by remember { mutableStateOf(false) }
     val status = when {
         store.energy < 25 -> "我快没力气了"
         store.food < 25 -> "肚子有点饿了"
@@ -244,21 +247,24 @@ private fun PetCard(store: LoveStore, backdrop: Backdrop) {
         modifier = Modifier.fillMaxWidth(),
         contentPadding = PaddingValues(18.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("🦊", fontSize = 42.sp)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.clickable { showPetPicker = true }
+        ) {
+            Text(store.petSpec.emoji, fontSize = 42.sp)
             Column(
                 Modifier
                     .weight(1f)
                     .padding(start = 12.dp)
             ) {
                 Text(
-                    text = "小毛球",
+                    text = store.petSpec.name,
                     color = colors.text,
                     fontSize = 17.sp,
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
-                    text = "Lv.${store.petLevel} ${store.petForm}",
+                    text = "Lv.${store.petLevel} ${store.petForm} · 换一只 ›",
                     color = colors.textTertiary,
                     fontSize = 12.sp
                 )
@@ -323,6 +329,67 @@ private fun PetCard(store: LoveStore, backdrop: Backdrop) {
             color = colors.textTertiary,
             fontSize = 11.sp
         )
+    }
+
+    if (showPetPicker) {
+        PetPickerDialog(store = store, onDismiss = { showPetPicker = false })
+    }
+}
+
+@Composable
+private fun PetPickerDialog(store: LoveStore, onDismiss: () -> Unit) {
+    val colors = LocalLoveColors.current
+    LoveDialog(onDismiss = onDismiss) {
+        DialogTitle("换一只")
+        Spacer(Modifier.height(6.dp))
+        DialogBody("成长等级越高，可以解锁更多小宠物。共同养成同一只。")
+        Spacer(Modifier.height(14.dp))
+        PetCatalog.chunked(3).forEach { row ->
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp)
+            ) {
+                row.forEach { pet ->
+                    val unlocked = store.petLevel >= pet.unlockLevel
+                    val selected = store.petType == pet.id
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(
+                                if (selected) colors.accentSoft
+                                else colors.stroke.copy(alpha = 0.35f)
+                            )
+                            .then(
+                                if (selected) {
+                                    Modifier.border(1.dp, colors.accent, RoundedCornerShape(16.dp))
+                                } else {
+                                    Modifier
+                                }
+                            )
+                            .clickable(enabled = unlocked) {
+                                store.petType = pet.id
+                                onDismiss()
+                            }
+                            .padding(vertical = 10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = if (unlocked) pet.emoji else "🔒",
+                            fontSize = 22.sp
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = if (unlocked) pet.name else "Lv.${pet.unlockLevel} 解锁",
+                            color = if (unlocked) colors.text else colors.textTertiary,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
