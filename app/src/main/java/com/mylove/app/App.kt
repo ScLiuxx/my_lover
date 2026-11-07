@@ -20,6 +20,7 @@ import com.mylove.app.data.LoveStore
 import com.mylove.app.notify.LoveNotifications
 import com.mylove.app.ui.LoveBackground
 import com.mylove.app.ui.LoveBottomBar
+import com.mylove.app.ui.GuideOverlay
 import com.mylove.app.ui.MyLoveTheme
 import com.mylove.app.ui.OnboardingScreen
 import com.mylove.app.ui.screens.CalendarScreen
@@ -111,6 +112,10 @@ fun MyLoveApp() {
                     onSelect = { tab = it },
                     modifier = Modifier.align(Alignment.BottomCenter)
                 )
+
+                if (!store.guideSeen) {
+                    GuideOverlay(onFinish = { store.guideSeen = true })
+                }
             }
         }
     }

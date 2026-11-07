@@ -37,6 +37,15 @@ private const val KEY_SYNC_ROLE = "sync_role"
 private const val KEY_PALETTE = "palette"
 private const val KEY_PET_TYPE = "pet_type"
 private const val KEY_NOTIFY = "notify_enabled"
+private const val KEY_MY_QUIZ = "my_quiz"
+private const val KEY_PERIOD_STARTS = "period_starts"
+private const val KEY_CYCLE = "cycle_length"
+private const val KEY_PERIOD_LEN = "period_length"
+private const val KEY_GUIDE_SEEN = "guide_seen"
+private const val KEY_ACTION_DATE = "action_date"
+private const val KEY_TOUCH = "touch_count"
+private const val KEY_PLAY = "play_count"
+private const val KEY_TASK_REWARD = "task_reward_date"
 
 /**
  * 极简本地状态：所有字段直接写入 SharedPreferences，够原型使用。
@@ -256,6 +265,7 @@ class LoveStore(private val prefs: SharedPreferences) {
         }
         _previousOpen = prefs.getLong(KEY_LAST_OPEN, 0L)
         lastOpenMe = System.currentTimeMillis()
+        resetDailyActions(today)
     }
 
     fun feed() {
@@ -264,11 +274,15 @@ class LoveStore(private val prefs: SharedPreferences) {
         coins = coins - 10
         food = food + 20
         growth = growth + 4
+        checkTaskReward()
     }
 
     fun petAction() {
         joy = joy + 8
         energy = energy - 2
+        _touchToday += 1
+        persistActions()
+        checkTaskReward()
     }
 
     fun play() {
@@ -277,6 +291,9 @@ class LoveStore(private val prefs: SharedPreferences) {
         joy = joy + 12
         energy = energy - 8
         growth = growth + 3
+        _playToday += 1
+        persistActions()
+        checkTaskReward()
     }
 
     fun sleep() {
@@ -295,6 +312,110 @@ class LoveStore(private val prefs: SharedPreferences) {
         growth = 10
         coins = 50
         feedUsed = 0
+    }
+
+    // ---- 生理期 ----
+
+    private var _periodStartsRaw by mutableStateOf(prefs.getString(KEY_PERIOD_STARTS, "")!!)
+
+    val periodStarts: List<LocalDate>
+        get() = _periodStartsRaw.split(",").mapNotNull { raw ->
+            runCatching { LocalDate.ofEpochDay(raw.trim().toLong()) }.getOrNull()
+        }
+
+    fun recordPeriodStart(date: LocalDate = LocalDate.now()) {
+        val cleaned = (periodStarts + date).distinct().sorted().takeLast(24)
+        _periodStartsRaw = cleaned.joinToString(",") { it.toEpochDay().toString() }
+        prefs.edit().putString(KEY_PERIOD_STARTS, _periodStartsRaw).apply()
+    }
+
+    fun clearPeriods() {
+        _periodStartsRaw = ""
+        prefs.edit().putString(KEY_PERIOD_STARTS, "").apply()
+    }
+
+    private var _cycleLength by mutableIntStateOf(prefs.getInt(KEY_CYCLE, 28))
+    var cycleLength: Int
+        get() = _cycleLength
+        set(value) {
+            _cycleLength = value.coerceIn(20, 45)
+            prefs.edit().putInt(KEY_CYCLE, _cycleLength).apply()
+        }
+
+    private var _periodLength by mutableIntStateOf(prefs.getInt(KEY_PERIOD_LEN, 5))
+    var periodLength: Int
+        get() = _periodLength
+        set(value) {
+            _periodLength = value.coerceIn(2, 10)
+            prefs.edit().putInt(KEY_PERIOD_LEN, _periodLength).apply()
+        }
+
+    // ---- 默契问答 ----
+
+    private var _myQuizRaw by mutableStateOf(prefs.getString(KEY_MY_QUIZ, "")!!)
+    val myQuizAnswers: Map<String, String> get() = parseQuiz(_myQuizRaw)
+
+    fun saveMyQuiz(answers: Map<String, String>) {
+        _myQuizRaw = encodeQuiz(answers)
+        prefs.edit().putString(KEY_MY_QUIZ, _myQuizRaw).apply()
+    }
+
+    private var _partnerQuizRaw by mutableStateOf("")
+    val partnerQuizAnswers: Map<String, String> get() = parseQuiz(_partnerQuizRaw)
+
+    // ---- 对方数据（云同步后可见）----
+
+    private var _partnerMood by mutableStateOf<String?>(null)
+    val partnerMood: String? get() = _partnerMood
+
+    private var _partnerDaily by mutableStateOf("")
+    val partnerDailyAnswer: String get() = _partnerDaily
+
+    // ---- 每日任务 ----
+
+    private var _touchToday by mutableIntStateOf(prefs.getInt(KEY_TOUCH, 0))
+    val touchToday: Int get() = _touchToday
+
+    private var _playToday by mutableIntStateOf(prefs.getInt(KEY_PLAY, 0))
+    val playToday: Int get() = _playToday
+
+    private var _taskRewardDate by mutableStateOf(prefs.getString(KEY_TASK_REWARD, "")!!)
+    val taskRewardDone: Boolean get() = _taskRewardDate == LocalDate.now().toString()
+
+    private var _guideSeen by mutableStateOf(prefs.getBoolean(KEY_GUIDE_SEEN, false))
+    var guideSeen: Boolean
+        get() = _guideSeen
+        set(value) {
+            _guideSeen = value
+            prefs.edit().putBoolean(KEY_GUIDE_SEEN, value).apply()
+        }
+
+    private fun persistActions() {
+        prefs.edit()
+            .putInt(KEY_TOUCH, _touchToday)
+            .putInt(KEY_PLAY, _playToday)
+            .apply()
+    }
+
+    private fun resetDailyActions(today: String) {
+        if (prefs.getString(KEY_ACTION_DATE, "") != today) {
+            _touchToday = 0
+            _playToday = 0
+            prefs.edit()
+                .putString(KEY_ACTION_DATE, today)
+                .putInt(KEY_TOUCH, 0)
+                .putInt(KEY_PLAY, 0)
+                .apply()
+        }
+    }
+
+    private fun checkTaskReward() {
+        val today = LocalDate.now().toString()
+        if (feedUsed >= 1 && _touchToday >= 3 && _playToday >= 1 && _taskRewardDate != today) {
+            _taskRewardDate = today
+            prefs.edit().putString(KEY_TASK_REWARD, today).apply()
+            coins = coins + 20
+        }
     }
 
     // ---- 云同步 ----
@@ -389,6 +510,7 @@ class LoveStore(private val prefs: SharedPreferences) {
             put("miss", JSONObject().put(meKey, missMe).put(partnerKey, missTa))
             put("moods", JSONObject().put(meKey, myMood ?: JSONObject.NULL))
             put("daily", JSONObject().put(meKey, dailyAnswer))
+            put("quiz", JSONObject().put(meKey, JSONObject(myQuizAnswers)))
             put("love_note", loveNote)
         }
     }
@@ -428,10 +550,17 @@ class LoveStore(private val prefs: SharedPreferences) {
         state.optJSONObject("moods")?.let { moods ->
             val value = moods.optString(meKey)
             myMood = value.takeIf { it.isNotBlank() && it != "null" }
+            val partnerValue = moods.optString(partnerKey)
+            _partnerMood = partnerValue.takeIf { it.isNotBlank() && it != "null" }
         }
 
         state.optJSONObject("daily")?.let { daily ->
             daily.optString(meKey).takeIf { it.isNotBlank() }?.let { dailyAnswer = it }
+            _partnerDaily = daily.optString(partnerKey)
+        }
+
+        state.optJSONObject("quiz")?.optJSONObject(partnerKey)?.let { partnerQuiz ->
+            _partnerQuizRaw = partnerQuiz.toString()
         }
 
         state.optString("love_note").takeIf { it.isNotBlank() }?.let { loveNote = it }

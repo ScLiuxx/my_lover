@@ -16,11 +16,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -32,12 +34,21 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kyant.backdrop.Backdrop
 import com.mylove.app.data.LoveStore
+import com.mylove.app.data.PeriodPrediction
+import com.mylove.app.data.buildPrediction
 import com.mylove.app.data.cnDate
 import com.mylove.app.data.cnShort
+import com.mylove.app.data.periodDaysInMonth
+import com.mylove.app.ui.DialogBody
+import com.mylove.app.ui.DialogTitle
+import com.mylove.app.ui.GlassButton
 import com.mylove.app.ui.GlassCard
+import com.mylove.app.ui.GlassPill
 import com.mylove.app.ui.HairLine
 import com.mylove.app.ui.LocalLoveColors
+import com.mylove.app.ui.LoveDialog
 import com.mylove.app.ui.PageHeader
+import com.mylove.app.ui.rememberDialogBackdrop
 import java.time.LocalDate
 import java.time.MonthDay
 import java.time.YearMonth
@@ -65,6 +76,15 @@ fun CalendarScreen(
             partnerBirthday = store.partnerBirthday
         )
     }
+    val periodDays = remember(month, store.periodStarts, store.cycleLength, store.periodLength) {
+        periodDaysInMonth(
+            starts = store.periodStarts,
+            cycleLength = store.cycleLength,
+            periodLength = store.periodLength,
+            month = month
+        )
+    }
+    var showCycleSettings by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = modifier
@@ -75,6 +95,13 @@ fun CalendarScreen(
     ) {
         item {
             PageHeader(title = "日历", subtitle = "把两个人的日子放在一起")
+        }
+        item {
+            PeriodCard(
+                store = store,
+                backdrop = backdrop,
+                onSettings = { showCycleSettings = true }
+            )
         }
         item {
             GlassCard(
@@ -101,6 +128,7 @@ fun CalendarScreen(
                     selected = selected,
                     today = today,
                     events = events,
+                    periodDays = periodDays,
                     onSelect = { selected = it }
                 )
             }
@@ -149,6 +177,221 @@ fun CalendarScreen(
         item {
             MonthEventList(month = month, events = events, backdrop = backdrop)
         }
+    }
+
+    if (showCycleSettings) {
+        CycleSettingsDialog(
+            store = store,
+            onDismiss = { showCycleSettings = false }
+        )
+    }
+}
+
+@Composable
+private fun PeriodCard(
+    store: LoveStore,
+    backdrop: Backdrop,
+    onSettings: () -> Unit
+) {
+    val colors = LocalLoveColors.current
+    val today = LocalDate.now()
+    val prediction = buildPrediction(
+        starts = store.periodStarts,
+        cycleLength = store.cycleLength,
+        periodLength = store.periodLength,
+        today = today
+    )
+    val statusText = when {
+        prediction.currentDay != null -> "经期第 ${prediction.currentDay} 天"
+        prediction.daysUntilNext != null -> "还有 ${prediction.daysUntilNext} 天"
+        else -> "未记录"
+    }
+
+    GlassCard(
+        backdrop = backdrop,
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(18.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "生理期",
+                color = colors.text,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f)
+            )
+            GlassPill(
+                text = statusText,
+                color = if (prediction.currentDay != null) colors.heart else colors.textSecondary
+            )
+        }
+        Spacer(Modifier.height(10.dp))
+        if (prediction.lastStart == null) {
+            Text(
+                text = "记录一次开始日期，就能预测下次经期、排卵日和易孕期。",
+                color = colors.textTertiary,
+                fontSize = 12.sp,
+                lineHeight = 18.sp
+            )
+        } else {
+            PeriodRow("上次开始", prediction.lastStart.cnDate())
+            Spacer(Modifier.height(6.dp))
+            prediction.nextStart?.let {
+                PeriodRow("预计下次", "${it.cnDate()} · 还有 ${prediction.daysUntilNext} 天")
+                Spacer(Modifier.height(6.dp))
+            }
+            prediction.ovulation?.let {
+                PeriodRow("排卵日", it.cnDate())
+                Spacer(Modifier.height(6.dp))
+            }
+            if (prediction.fertileStart != null && prediction.fertileEnd != null) {
+                PeriodRow(
+                    "易孕期",
+                    "${prediction.fertileStart.cnShort()} - ${prediction.fertileEnd.cnShort()}"
+                )
+                Spacer(Modifier.height(6.dp))
+            }
+            PeriodRow("周期 / 经期", "${store.cycleLength} 天 / ${store.periodLength} 天")
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            GlassButton(
+                backdrop = backdrop,
+                onClick = { store.recordPeriodStart(today) },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = if (prediction.lastStart == today) "今天已记录" else "今天来了",
+                    color = colors.heart,
+                    fontSize = 13.sp
+                )
+            }
+            GlassButton(
+                backdrop = backdrop,
+                onClick = onSettings,
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("周期设置", color = colors.textSecondary, fontSize = 13.sp)
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = "预测仅供参考，不构成医疗建议",
+            color = colors.textTertiary,
+            fontSize = 11.sp
+        )
+    }
+}
+
+@Composable
+private fun PeriodRow(label: String, value: String) {
+    val colors = LocalLoveColors.current
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = label,
+            color = colors.textSecondary,
+            fontSize = 12.sp,
+            modifier = Modifier.width(72.dp)
+        )
+        Text(
+            text = value,
+            color = colors.text,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
+@Composable
+private fun CycleSettingsDialog(store: LoveStore, onDismiss: () -> Unit) {
+    val colors = LocalLoveColors.current
+    var cycle by remember { mutableIntStateOf(store.cycleLength) }
+    var period by remember { mutableIntStateOf(store.periodLength) }
+
+    LoveDialog(onDismiss = onDismiss) {
+        DialogTitle("周期设置")
+        Spacer(Modifier.height(6.dp))
+        DialogBody("按自己的规律调整，预测会更准确。")
+        Spacer(Modifier.height(16.dp))
+        AdjustRow(
+            label = "周期长度",
+            value = "$cycle 天",
+            onMinus = { cycle = (cycle - 1).coerceAtLeast(20) },
+            onPlus = { cycle = (cycle + 1).coerceAtMost(45) }
+        )
+        Spacer(Modifier.height(8.dp))
+        AdjustRow(
+            label = "经期长度",
+            value = "$period 天",
+            onMinus = { period = (period - 1).coerceAtLeast(2) },
+            onPlus = { period = (period + 1).coerceAtMost(10) }
+        )
+        Spacer(Modifier.height(18.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            GlassButton(
+                backdrop = rememberDialogBackdrop(),
+                onClick = {
+                    store.clearPeriods()
+                    onDismiss()
+                },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("清除记录", color = colors.textSecondary, fontSize = 13.sp)
+            }
+            GlassButton(
+                backdrop = rememberDialogBackdrop(),
+                onClick = {
+                    store.cycleLength = cycle
+                    store.periodLength = period
+                    onDismiss()
+                },
+                modifier = Modifier.weight(1f),
+                tint = colors.accent
+            ) {
+                Text("保存", color = androidx.compose.ui.graphics.Color.White, fontSize = 13.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AdjustRow(label: String, value: String, onMinus: () -> Unit, onPlus: () -> Unit) {
+    val colors = LocalLoveColors.current
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            color = colors.textSecondary,
+            fontSize = 13.sp,
+            modifier = Modifier.weight(1f)
+        )
+        RoundAdjust(text = "−", onClick = onMinus)
+        Text(
+            text = value,
+            color = colors.text,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Medium,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            modifier = Modifier.width(70.dp)
+        )
+        RoundAdjust(text = "+", onClick = onPlus)
+    }
+}
+
+@Composable
+private fun RoundAdjust(text: String, onClick: () -> Unit) {
+    val colors = LocalLoveColors.current
+    Box(
+        modifier = Modifier
+            .size(30.dp)
+            .clip(CircleShape)
+            .background(colors.stroke.copy(alpha = 0.6f))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(text = text, color = colors.text, fontSize = 15.sp)
     }
 }
 
@@ -246,6 +489,7 @@ private fun MonthGrid(
     selected: LocalDate,
     today: LocalDate,
     events: Map<LocalDate, List<DayEvent>>,
+    periodDays: Set<LocalDate>,
     onSelect: (LocalDate) -> Unit
 ) {
     val offset = month.atDay(1).dayOfWeek.value - 1
@@ -263,6 +507,7 @@ private fun MonthGrid(
                         DayCell(
                             date = date,
                             eventCount = events[date].orEmpty().size,
+                            isPeriod = date in periodDays,
                             isSelected = date == selected,
                             isToday = date == today,
                             onClick = { onSelect(date) },
@@ -281,6 +526,7 @@ private fun MonthGrid(
 private fun DayCell(
     date: LocalDate,
     eventCount: Int,
+    isPeriod: Boolean,
     isSelected: Boolean,
     isToday: Boolean,
     onClick: () -> Unit,
@@ -315,14 +561,28 @@ private fun DayCell(
                 fontSize = 14.sp,
                 fontWeight = if (isSelected || isToday) FontWeight.SemiBold else FontWeight.Normal
             )
-            if (eventCount > 0) {
-                Box(
-                    Modifier
-                        .padding(top = 2.dp)
-                        .size(4.dp)
-                        .clip(CircleShape)
-                        .background(colors.accent)
-                )
+            if (eventCount > 0 || isPeriod) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    modifier = Modifier.padding(top = 2.dp)
+                ) {
+                    if (isPeriod) {
+                        Box(
+                            Modifier
+                                .size(4.dp)
+                                .clip(CircleShape)
+                                .background(colors.heart)
+                        )
+                    }
+                    if (eventCount > 0) {
+                        Box(
+                            Modifier
+                                .size(4.dp)
+                                .clip(CircleShape)
+                                .background(colors.accent)
+                        )
+                    }
+                }
             }
         }
     }

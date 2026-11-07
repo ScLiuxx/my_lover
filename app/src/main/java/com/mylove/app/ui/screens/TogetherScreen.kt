@@ -5,6 +5,8 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -40,10 +43,12 @@ import com.kyant.backdrop.Backdrop
 import com.kyant.shapes.Capsule
 import com.mylove.app.data.LoveStore
 import com.mylove.app.data.PetCatalog
+import com.mylove.app.data.QuizQuestions
 import com.mylove.app.data.cnShort
 import com.mylove.app.data.daysTogether
 import com.mylove.app.data.formatAgo
 import com.mylove.app.data.nextHundredDay
+import com.mylove.app.data.quizScore
 import com.mylove.app.ui.DialogBody
 import com.mylove.app.ui.DialogTitle
 import com.mylove.app.ui.GlassButton
@@ -57,6 +62,7 @@ import com.mylove.app.ui.PageHeader
 import com.mylove.app.ui.SectionTitle
 import com.mylove.app.ui.StatBar
 import com.mylove.app.ui.glass
+import com.mylove.app.ui.rememberDialogBackdrop
 import java.time.LocalDate
 
 private enum class TogetherDialog { Report, Daily, Food, Quiz, Note, Milestone }
@@ -99,6 +105,7 @@ fun TogetherScreen(
         item {
             DailyQuestionCard(
                 answer = store.dailyAnswer,
+                partnerAnswer = store.partnerDailyAnswer,
                 backdrop = backdrop,
                 onAnswer = { dialog = TogetherDialog.Daily }
             )
@@ -108,6 +115,7 @@ fun TogetherScreen(
         }
         item {
             MiniAppGrid(
+                store = store,
                 backdrop = backdrop,
                 onOpen = { dialog = it }
             )
@@ -124,7 +132,7 @@ fun TogetherScreen(
         TogetherDialog.Report -> ReportDialog(store = store, onDismiss = { dialog = null })
         TogetherDialog.Daily -> DailyDialog(store = store, onDismiss = { dialog = null })
         TogetherDialog.Food -> FoodDialog(onDismiss = { dialog = null })
-        TogetherDialog.Quiz -> QuizDialog(onDismiss = { dialog = null })
+        TogetherDialog.Quiz -> QuizDialog(store = store, onDismiss = { dialog = null })
         TogetherDialog.Note -> NoteDialog(store = store, onDismiss = { dialog = null })
         TogetherDialog.Milestone -> MilestoneDialog(store = store, onDismiss = { dialog = null })
         null -> Unit
@@ -172,6 +180,7 @@ private fun ReportCard(
 @Composable
 private fun DailyQuestionCard(
     answer: String,
+    partnerAnswer: String,
     backdrop: Backdrop,
     onAnswer: () -> Unit
 ) {
@@ -209,6 +218,12 @@ private fun DailyQuestionCard(
                 fontSize = 13.sp
             )
         }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = if (partnerAnswer.isBlank()) "TA 还没回答" else "TA 的回答：$partnerAnswer",
+            color = if (partnerAnswer.isBlank()) colors.textTertiary else colors.textSecondary,
+            fontSize = 13.sp
+        )
         Spacer(Modifier.height(10.dp))
         Text(
             text = "互相可见 · 每天 0 点更新",
@@ -325,8 +340,13 @@ private fun PetCard(store: LoveStore, backdrop: Backdrop) {
         }
         Spacer(Modifier.height(10.dp))
         Text(
-            text = "任务：喂食一次 · 摸摸三次 · 玩耍一次",
+            text = "任务  喂食 ${if (store.feedUsed >= 1) 1 else 0}/1 · 摸摸 ${store.touchToday.coerceAtMost(3)}/3 · 玩耍 ${if (store.playToday >= 1) 1 else 0}/1",
             color = colors.textTertiary,
+            fontSize = 11.sp
+        )
+        Text(
+            text = if (store.taskRewardDone) "今日奖励已领取 +20 金币" else "全部完成奖励 +20 金币",
+            color = if (store.taskRewardDone) colors.accent else colors.textTertiary,
             fontSize = 11.sp
         )
     }
@@ -427,6 +447,7 @@ private fun PetAction(
 
 @Composable
 private fun MiniAppGrid(
+    store: LoveStore,
     backdrop: Backdrop,
     onOpen: (TogetherDialog) -> Unit
 ) {
@@ -453,7 +474,11 @@ private fun MiniAppGrid(
             MiniAppCard(
                 emoji = "💌",
                 title = "情话",
-                subtitle = "写一句只给 TA 看",
+                subtitle = if (store.loveNote.isBlank()) {
+                    "写一句只给 TA 看"
+                } else {
+                    "你写过：${store.loveNote.take(12)}"
+                },
                 backdrop = backdrop,
                 modifier = Modifier.weight(1f),
                 onClick = { onOpen(TogetherDialog.Note) }
@@ -594,7 +619,7 @@ private fun MoodCard(store: LoveStore, backdrop: Backdrop) {
                 modifier = Modifier.weight(1f)
             )
             Text(
-                text = "TA 还没记",
+                text = store.partnerMood?.let { "TA：$it" } ?: "TA 还没记",
                 color = colors.textTertiary,
                 fontSize = 12.sp
             )
@@ -760,35 +785,89 @@ private fun FoodDialog(onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun QuizDialog(onDismiss: () -> Unit) {
+private fun QuizDialog(store: LoveStore, onDismiss: () -> Unit) {
     val colors = LocalLoveColors.current
+    var answers by remember { mutableStateOf(store.myQuizAnswers) }
+    val partnerAnswers = store.partnerQuizAnswers
+    val score = quizScore(answers, partnerAnswers)
+
     LoveDialog(onDismiss = onDismiss) {
         DialogTitle("默契问答")
         Spacer(Modifier.height(6.dp))
-        DialogBody("今天的问题：TA 最想收到的礼物是什么？")
-        Spacer(Modifier.height(16.dp))
-        Text(
-            text = "80 分",
-            color = colors.accent,
-            fontSize = 34.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.align(Alignment.CenterHorizontally)
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = "你们的默契度超过 82% 的情侣",
-            color = colors.textTertiary,
-            fontSize = 12.sp,
-            modifier = Modifier.align(Alignment.CenterHorizontally)
-        )
-        Spacer(Modifier.height(18.dp))
-        GlassButton(
-            backdrop = com.kyant.backdrop.backdrops.rememberCanvasBackdrop { },
-            onClick = onDismiss,
-            modifier = Modifier.fillMaxWidth(),
-            tint = colors.accent
+        DialogBody("凭直觉选出你觉得 TA 会选的那个，同步后自动算出默契度。")
+        Spacer(Modifier.height(12.dp))
+        Column(
+            Modifier
+                .heightIn(max = 360.dp)
+                .verticalScroll(rememberScrollState())
         ) {
-            Text("下次再答", color = Color.White, fontSize = 14.sp)
+            QuizQuestions.forEach { question ->
+                Text(
+                    text = question.title,
+                    color = colors.text,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(Modifier.height(6.dp))
+                question.options.forEachIndexed { index, option ->
+                    val value = index.toString()
+                    val selected = answers[question.id] == value
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 3.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(
+                                if (selected) colors.accentSoft
+                                else colors.stroke.copy(alpha = 0.3f)
+                            )
+                            .clickable { answers = answers + (question.id to value) }
+                            .padding(horizontal = 12.dp, vertical = 9.dp)
+                    ) {
+                        Text(
+                            text = option,
+                            color = if (selected) colors.accent else colors.textSecondary,
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+            }
+        }
+        if (score != null) {
+            Text(
+                text = "当前默契度 $score 分",
+                color = colors.accent,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        } else if (partnerAnswers.isEmpty()) {
+            Text(
+                text = "TA 还没作答，先保存你的答案",
+                color = colors.textTertiary,
+                fontSize = 11.sp
+            )
+        }
+        Spacer(Modifier.height(14.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            GlassButton(
+                backdrop = rememberDialogBackdrop(),
+                onClick = onDismiss,
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("取消", color = colors.textSecondary, fontSize = 14.sp)
+            }
+            GlassButton(
+                backdrop = rememberDialogBackdrop(),
+                onClick = {
+                    store.saveMyQuiz(answers)
+                    onDismiss()
+                },
+                modifier = Modifier.weight(1f),
+                tint = colors.accent
+            ) {
+                Text("保存", color = Color.White, fontSize = 14.sp)
+            }
         }
     }
 }

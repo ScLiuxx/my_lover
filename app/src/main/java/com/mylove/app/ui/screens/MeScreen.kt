@@ -517,6 +517,14 @@ fun MeScreen(
                 Spacer(Modifier.height(16.dp))
                 GlassButton(
                     backdrop = backdrop,
+                    onClick = { store.guideSeen = false },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("重看新手引导", color = colors.textSecondary, fontSize = 13.sp)
+                }
+                Spacer(Modifier.height(8.dp))
+                GlassButton(
+                    backdrop = backdrop,
                     onClick = { confirmingReset = true },
                     modifier = Modifier.fillMaxWidth()
                 ) {
