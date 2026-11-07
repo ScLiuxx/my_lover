@@ -157,8 +157,8 @@ private fun buildEvents(
     start: LocalDate,
     meName: String,
     partnerName: String,
-    meBirthday: MonthDay,
-    partnerBirthday: MonthDay
+    meBirthday: MonthDay?,
+    partnerBirthday: MonthDay?
 ): Map<LocalDate, List<DayEvent>> {
     val map = mutableMapOf<LocalDate, MutableList<DayEvent>>()
 
@@ -172,8 +172,8 @@ private fun buildEvents(
     if (anniversary != null) {
         add(anniversary, DayEvent("❤️", "在一起纪念日"))
     }
-    add(meBirthday.atYear(month.year), DayEvent("🎂", "$meName 生日"))
-    add(partnerBirthday.atYear(month.year), DayEvent("🎂", "$partnerName 生日"))
+    meBirthday?.let { add(it.atYear(month.year), DayEvent("🎂", "$meName 生日")) }
+    partnerBirthday?.let { add(it.atYear(month.year), DayEvent("🎂", "$partnerName 生日")) }
 
     var hundred = 100L
     while (true) {

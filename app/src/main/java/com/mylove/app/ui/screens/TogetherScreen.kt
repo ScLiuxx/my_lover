@@ -459,7 +459,7 @@ private fun MissingCard(store: LoveStore, backdrop: Backdrop) {
                 modifier = Modifier.weight(1f)
             )
             Text(
-                text = "今天 ${store.missMe % 7 + 1} 次",
+                text = "累计 ${store.missMe + store.missTa} 次",
                 color = colors.textTertiary,
                 fontSize = 12.sp
             )

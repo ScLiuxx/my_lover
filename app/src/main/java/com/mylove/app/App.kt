@@ -19,6 +19,7 @@ import com.mylove.app.data.LoveStore
 import com.mylove.app.ui.LoveBackground
 import com.mylove.app.ui.LoveBottomBar
 import com.mylove.app.ui.MyLoveTheme
+import com.mylove.app.ui.OnboardingScreen
 import com.mylove.app.ui.screens.CalendarScreen
 import com.mylove.app.ui.screens.MeScreen
 import com.mylove.app.ui.screens.TogetherScreen
@@ -41,19 +42,9 @@ fun MyLoveApp() {
     }
 
     MyLoveTheme(darkTheme = dark) {
-        var tab by rememberSaveable { mutableIntStateOf(0) }
-
-        Box(Modifier.fillMaxSize()) {
-            // 卡片取样：只包含背景，避免把卡片自身画进玻璃
-            val backgroundBackdrop = rememberLayerBackdrop { drawContent() }
-            // 底栏取样：包含背景 + 页面内容
-            val contentBackdrop = rememberLayerBackdrop { drawContent() }
-
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .layerBackdrop(contentBackdrop)
-            ) {
+        if (!store.isConfigured) {
+            Box(Modifier.fillMaxSize()) {
+                val backgroundBackdrop = rememberLayerBackdrop { drawContent() }
                 Box(
                     Modifier
                         .fillMaxSize()
@@ -61,21 +52,49 @@ fun MyLoveApp() {
                 ) {
                     LoveBackground(Modifier.fillMaxSize())
                 }
-
-                when (tab) {
-                    0 -> UsScreen(store, backgroundBackdrop, Modifier.fillMaxSize())
-                    1 -> CalendarScreen(store, backgroundBackdrop, Modifier.fillMaxSize())
-                    2 -> TogetherScreen(store, backgroundBackdrop, Modifier.fillMaxSize())
-                    else -> MeScreen(store, backgroundBackdrop, Modifier.fillMaxSize())
-                }
+                OnboardingScreen(
+                    store = store,
+                    backdrop = backgroundBackdrop,
+                    modifier = Modifier.fillMaxSize()
+                )
             }
+        } else {
+            var tab by rememberSaveable { mutableIntStateOf(0) }
 
-            LoveBottomBar(
-                backdrop = contentBackdrop,
-                selected = tab,
-                onSelect = { tab = it },
-                modifier = Modifier.align(Alignment.BottomCenter)
-            )
+            Box(Modifier.fillMaxSize()) {
+                // 卡片取样：只包含背景，避免把卡片自身画进玻璃
+                val backgroundBackdrop = rememberLayerBackdrop { drawContent() }
+                // 底栏取样：包含背景 + 页面内容
+                val contentBackdrop = rememberLayerBackdrop { drawContent() }
+
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .layerBackdrop(contentBackdrop)
+                ) {
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .layerBackdrop(backgroundBackdrop)
+                    ) {
+                        LoveBackground(Modifier.fillMaxSize())
+                    }
+
+                    when (tab) {
+                        0 -> UsScreen(store, backgroundBackdrop, Modifier.fillMaxSize())
+                        1 -> CalendarScreen(store, backgroundBackdrop, Modifier.fillMaxSize())
+                        2 -> TogetherScreen(store, backgroundBackdrop, Modifier.fillMaxSize())
+                        else -> MeScreen(store, backgroundBackdrop, Modifier.fillMaxSize())
+                    }
+                }
+
+                LoveBottomBar(
+                    backdrop = contentBackdrop,
+                    selected = tab,
+                    onSelect = { tab = it },
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                )
+            }
         }
     }
 }

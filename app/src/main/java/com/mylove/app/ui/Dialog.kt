@@ -20,10 +20,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.backdrops.rememberCanvasBackdrop
 
 /**
  * 弹窗在独立窗口里无法取样背景，用接近玻璃的纯色卡片代替。
  */
+@Composable
+fun rememberDialogBackdrop(): Backdrop = rememberCanvasBackdrop { }
 @Composable
 fun LoveDialog(
     onDismiss: () -> Unit,

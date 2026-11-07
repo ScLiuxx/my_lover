@@ -25,6 +25,7 @@ import com.mylove.app.data.cnShort
 import com.mylove.app.data.cnWeekday
 import com.mylove.app.data.daysTogether
 import com.mylove.app.data.daysUntil
+import com.mylove.app.data.formatAgo
 import com.mylove.app.data.formatElapsed
 import com.mylove.app.data.nextHundredDay
 import com.mylove.app.data.nextOccurrence
@@ -81,6 +82,8 @@ fun UsScreen(
         item {
             PresenceCard(
                 meName = store.meName,
+                previousOpen = store.previousOpen,
+                isSynced = store.isSynced,
                 backdrop = backdrop
             )
         }
@@ -89,8 +92,8 @@ fun UsScreen(
                 start = start,
                 meName = store.meName,
                 partnerName = store.partnerName,
-                meBirthday = store.meBirthday.nextOccurrence(today),
-                partnerBirthday = store.partnerBirthday.nextOccurrence(today),
+                meBirthday = store.meBirthday?.nextOccurrence(today),
+                partnerBirthday = store.partnerBirthday?.nextOccurrence(today),
                 today = today,
                 backdrop = backdrop
             )
@@ -204,6 +207,8 @@ private fun PersonColumn(
 @Composable
 private fun PresenceCard(
     meName: String,
+    previousOpen: Long,
+    isSynced: Boolean,
     backdrop: Backdrop
 ) {
     val colors = LocalLoveColors.current
@@ -214,13 +219,13 @@ private fun PresenceCard(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = "TA 上次打开",
+                text = "你上次打开",
                 color = colors.textSecondary,
                 fontSize = 13.sp,
                 modifier = Modifier.weight(1f)
             )
             Text(
-                text = "57 小时前",
+                text = if (previousOpen == 0L) "第一次打开" else formatAgo(previousOpen),
                 color = colors.text,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium
@@ -229,13 +234,13 @@ private fun PresenceCard(
         Spacer(Modifier.height(10.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = "今天待了",
+                text = "云同步",
                 color = colors.textSecondary,
                 fontSize = 13.sp,
                 modifier = Modifier.weight(1f)
             )
             Text(
-                text = "你不到 1 分钟 · TA 还没来",
+                text = if (isSynced) "已连接" else "未连接",
                 color = colors.text,
                 fontSize = 13.sp
             )
@@ -254,8 +259,8 @@ private fun UpcomingCard(
     start: LocalDate,
     meName: String,
     partnerName: String,
-    meBirthday: LocalDate,
-    partnerBirthday: LocalDate,
+    meBirthday: LocalDate?,
+    partnerBirthday: LocalDate?,
     today: LocalDate,
     backdrop: Backdrop
 ) {
@@ -273,13 +278,21 @@ private fun UpcomingCard(
         )
         Spacer(Modifier.height(12.dp))
         UpcomingRow("💑", "在一起的日子", "${anniversary.cnShort()} · 还有 ${daysUntil(anniversary, today)} 天")
-        HairLine(Modifier.padding(vertical = 10.dp))
-        UpcomingRow("🎂", "${partnerName}的生日", "${partnerBirthday.cnShort()} · 还有 ${daysUntil(partnerBirthday, today)} 天")
-        HairLine(Modifier.padding(vertical = 10.dp))
-        UpcomingRow("🎂", "${meName}的生日", "${meBirthday.cnShort()} · 还有 ${daysUntil(meBirthday, today)} 天")
+        if (partnerBirthday != null) {
+            HairLine(Modifier.padding(vertical = 10.dp))
+            UpcomingRow("🎂", "${partnerName}的生日", "${partnerBirthday.cnShort()} · 还有 ${daysUntil(partnerBirthday, today)} 天")
+        }
+        if (meBirthday != null) {
+            HairLine(Modifier.padding(vertical = 10.dp))
+            UpcomingRow("🎂", "${meName}的生日", "${meBirthday.cnShort()} · 还有 ${daysUntil(meBirthday, today)} 天")
+        }
         Spacer(Modifier.height(6.dp))
         Text(
-            text = "重要的日子都在「我的」里",
+            text = if (meBirthday == null || partnerBirthday == null) {
+                "生日还没填，可以在「我的 → 重要的日子」里补上"
+            } else {
+                "重要的日子都在「我的」里"
+            },
             color = colors.textTertiary,
             fontSize = 11.sp
         )

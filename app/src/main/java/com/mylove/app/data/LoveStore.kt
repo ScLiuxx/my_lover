@@ -28,6 +28,7 @@ private const val KEY_MY_MOOD = "my_mood"
 private const val KEY_DAILY_ANSWER = "daily_answer"
 private const val KEY_LOVE_NOTE = "love_note"
 private const val KEY_LAST_OPEN = "last_open"
+private const val KEY_CONFIGURED = "configured"
 private const val KEY_SYNC_SERVER = "sync_server"
 private const val KEY_SYNC_TOKEN = "sync_token"
 private const val KEY_SYNC_COUPLE = "sync_couple"
@@ -39,7 +40,7 @@ private const val KEY_SYNC_ROLE = "sync_role"
  */
 class LoveStore(private val prefs: SharedPreferences) {
 
-    private var _meName by mutableStateOf(prefs.getString(KEY_ME_NAME, "赵炳冰")!!)
+    private var _meName by mutableStateOf(prefs.getString(KEY_ME_NAME, "")!!)
     var meName: String
         get() = _meName
         set(value) {
@@ -47,7 +48,7 @@ class LoveStore(private val prefs: SharedPreferences) {
             prefs.edit().putString(KEY_ME_NAME, value).apply()
         }
 
-    private var _partnerName by mutableStateOf(prefs.getString(KEY_PARTNER_NAME, "刘铠博")!!)
+    private var _partnerName by mutableStateOf(prefs.getString(KEY_PARTNER_NAME, "")!!)
     var partnerName: String
         get() = _partnerName
         set(value) {
@@ -56,7 +57,7 @@ class LoveStore(private val prefs: SharedPreferences) {
         }
 
     private var _startDate by mutableStateOf(
-        LocalDate.ofEpochDay(prefs.getLong(KEY_START_DATE, LocalDate.of(2026, 4, 21).toEpochDay()))
+        LocalDate.ofEpochDay(prefs.getLong(KEY_START_DATE, LocalDate.now().toEpochDay()))
     )
     var startDate: LocalDate
         get() = _startDate
@@ -66,23 +67,27 @@ class LoveStore(private val prefs: SharedPreferences) {
         }
 
     private var _meBirthday by mutableStateOf(
-        MonthDay.parse(prefs.getString(KEY_ME_BIRTHDAY, "--05-09"))
+        prefs.getString(KEY_ME_BIRTHDAY, "")!!.takeIf { it.isNotBlank() }?.let { raw ->
+            runCatching { MonthDay.parse(raw) }.getOrNull()
+        }
     )
-    var meBirthday: MonthDay
+    var meBirthday: MonthDay?
         get() = _meBirthday
         set(value) {
             _meBirthday = value
-            prefs.edit().putString(KEY_ME_BIRTHDAY, value.toString()).apply()
+            prefs.edit().putString(KEY_ME_BIRTHDAY, value?.toString() ?: "").apply()
         }
 
     private var _partnerBirthday by mutableStateOf(
-        MonthDay.parse(prefs.getString(KEY_PARTNER_BIRTHDAY, "--04-21"))
+        prefs.getString(KEY_PARTNER_BIRTHDAY, "")!!.takeIf { it.isNotBlank() }?.let { raw ->
+            runCatching { MonthDay.parse(raw) }.getOrNull()
+        }
     )
-    var partnerBirthday: MonthDay
+    var partnerBirthday: MonthDay?
         get() = _partnerBirthday
         set(value) {
             _partnerBirthday = value
-            prefs.edit().putString(KEY_PARTNER_BIRTHDAY, value.toString()).apply()
+            prefs.edit().putString(KEY_PARTNER_BIRTHDAY, value?.toString() ?: "").apply()
         }
 
     private var _themeMode by mutableIntStateOf(prefs.getInt(KEY_THEME_MODE, 0))
@@ -93,7 +98,21 @@ class LoveStore(private val prefs: SharedPreferences) {
             prefs.edit().putInt(KEY_THEME_MODE, value).apply()
         }
 
-    private var _food by mutableIntStateOf(prefs.getInt(KEY_FOOD, 46))
+    private var _configured by mutableStateOf(prefs.getBoolean(KEY_CONFIGURED, false))
+    val isConfigured: Boolean get() = _configured
+
+    fun completeSetup(me: String, partner: String, start: LocalDate) {
+        meName = me.trim()
+        partnerName = partner.trim()
+        startDate = start
+        _configured = true
+        prefs.edit().putBoolean(KEY_CONFIGURED, true).apply()
+    }
+
+    private var _previousOpen by mutableStateOf(0L)
+    val previousOpen: Long get() = _previousOpen
+
+    private var _food by mutableIntStateOf(prefs.getInt(KEY_FOOD, 50))
     var food: Int
         get() = _food
         private set(value) {
@@ -101,7 +120,7 @@ class LoveStore(private val prefs: SharedPreferences) {
             prefs.edit().putInt(KEY_FOOD, _food).apply()
         }
 
-    private var _joy by mutableIntStateOf(prefs.getInt(KEY_JOY, 58))
+    private var _joy by mutableIntStateOf(prefs.getInt(KEY_JOY, 50))
     var joy: Int
         get() = _joy
         private set(value) {
@@ -109,7 +128,7 @@ class LoveStore(private val prefs: SharedPreferences) {
             prefs.edit().putInt(KEY_JOY, _joy).apply()
         }
 
-    private var _energy by mutableIntStateOf(prefs.getInt(KEY_ENERGY, 32))
+    private var _energy by mutableIntStateOf(prefs.getInt(KEY_ENERGY, 50))
     var energy: Int
         get() = _energy
         private set(value) {
@@ -117,7 +136,7 @@ class LoveStore(private val prefs: SharedPreferences) {
             prefs.edit().putInt(KEY_ENERGY, _energy).apply()
         }
 
-    private var _growth by mutableIntStateOf(prefs.getInt(KEY_GROWTH, 74))
+    private var _growth by mutableIntStateOf(prefs.getInt(KEY_GROWTH, 0))
     var growth: Int
         get() = _growth
         private set(value) {
@@ -125,7 +144,7 @@ class LoveStore(private val prefs: SharedPreferences) {
             prefs.edit().putInt(KEY_GROWTH, _growth).apply()
         }
 
-    private var _coins by mutableIntStateOf(prefs.getInt(KEY_COINS, 114))
+    private var _coins by mutableIntStateOf(prefs.getInt(KEY_COINS, 0))
     var coins: Int
         get() = _coins
         private set(value) {
@@ -144,7 +163,7 @@ class LoveStore(private val prefs: SharedPreferences) {
                 .apply()
         }
 
-    private var _missMe by mutableIntStateOf(prefs.getInt(KEY_MISS_ME, 28))
+    private var _missMe by mutableIntStateOf(prefs.getInt(KEY_MISS_ME, 0))
     var missMe: Int
         get() = _missMe
         private set(value) {
@@ -152,7 +171,7 @@ class LoveStore(private val prefs: SharedPreferences) {
             prefs.edit().putInt(KEY_MISS_ME, value).apply()
         }
 
-    private var _missTa by mutableIntStateOf(prefs.getInt(KEY_MISS_TA, 66))
+    private var _missTa by mutableIntStateOf(prefs.getInt(KEY_MISS_TA, 0))
     var missTa: Int
         get() = _missTa
         private set(value) {
@@ -213,6 +232,7 @@ class LoveStore(private val prefs: SharedPreferences) {
                 .putString(KEY_FEED_DATE, today)
                 .apply()
         }
+        _previousOpen = prefs.getLong(KEY_LAST_OPEN, 0L)
         lastOpenMe = System.currentTimeMillis()
     }
 
@@ -332,8 +352,8 @@ class LoveStore(private val prefs: SharedPreferences) {
             put(
                 "birthdays",
                 JSONObject()
-                    .put(meKey, meBirthday.toString())
-                    .put(partnerKey, partnerBirthday.toString())
+                    .put(meKey, meBirthday?.toString() ?: "")
+                    .put(partnerKey, partnerBirthday?.toString() ?: "")
             )
             put(
                 "pet",

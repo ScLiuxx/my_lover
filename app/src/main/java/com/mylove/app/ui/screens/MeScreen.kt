@@ -39,13 +39,16 @@ import com.mylove.app.data.daysTogether
 import com.mylove.app.data.nextHundredDay
 import com.mylove.app.ui.DialogBody
 import com.mylove.app.ui.DialogTitle
+import com.mylove.app.ui.DateStepperDialog
 import com.mylove.app.ui.GlassButton
 import com.mylove.app.ui.GlassCard
 import com.mylove.app.ui.HairLine
 import com.mylove.app.ui.LocalLoveColors
 import com.mylove.app.ui.LoveDialog
 import com.mylove.app.ui.LoveTextField
+import com.mylove.app.ui.MonthDayDialog
 import com.mylove.app.ui.PageHeader
+import com.mylove.app.ui.rememberDialogBackdrop
 import kotlinx.coroutines.launch
 
 private val themeOptions = listOf("跟随系统", "浅色", "深色")
@@ -63,6 +66,9 @@ fun MeScreen(
     var syncDialog by remember { mutableStateOf(false) }
     var syncMessage by remember { mutableStateOf<String?>(null) }
     var syncing by remember { mutableStateOf(false) }
+    var editingAnniversary by remember { mutableStateOf(false) }
+    var editingMyBirthday by remember { mutableStateOf(false) }
+    var editingPartnerBirthday by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     LazyColumn(
@@ -187,15 +193,33 @@ fun MeScreen(
                     fontWeight = FontWeight.SemiBold
                 )
                 Spacer(Modifier.height(12.dp))
-                InfoRow("纪念日", store.startDate.cnDate())
+                EditableInfoRow("纪念日", store.startDate.cnDate()) {
+                    editingAnniversary = true
+                }
                 HairLine(Modifier.padding(vertical = 10.dp))
-                InfoRow("${store.partnerName} 生日", store.partnerBirthday.cnShort())
+                EditableInfoRow(
+                    "${store.partnerName} 生日",
+                    store.partnerBirthday?.cnShort() ?: "未设置"
+                ) {
+                    editingPartnerBirthday = true
+                }
                 HairLine(Modifier.padding(vertical = 10.dp))
-                InfoRow("${store.meName} 生日", store.meBirthday.cnShort())
+                EditableInfoRow(
+                    "${store.meName} 生日",
+                    store.meBirthday?.cnShort() ?: "未设置"
+                ) {
+                    editingMyBirthday = true
+                }
                 HairLine(Modifier.padding(vertical = 10.dp))
                 InfoRow(
                     "下一个百天",
                     nextHundredDay(store.startDate).cnDate()
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = "点一下就能修改",
+                    color = colors.textTertiary,
+                    fontSize = 11.sp
                 )
             }
         }
@@ -394,6 +418,42 @@ fun MeScreen(
             onDismiss = { syncDialog = false }
         )
     }
+
+    if (editingAnniversary) {
+        DateStepperDialog(
+            title = "在一起的纪念日",
+            initial = store.startDate,
+            onDismiss = { editingAnniversary = false },
+            onConfirm = {
+                store.startDate = it
+                editingAnniversary = false
+            }
+        )
+    }
+
+    if (editingMyBirthday) {
+        MonthDayDialog(
+            title = "${store.meName} 的生日",
+            initial = store.meBirthday,
+            onDismiss = { editingMyBirthday = false },
+            onConfirm = {
+                store.meBirthday = it
+                editingMyBirthday = false
+            }
+        )
+    }
+
+    if (editingPartnerBirthday) {
+        MonthDayDialog(
+            title = "${store.partnerName} 的生日",
+            initial = store.partnerBirthday,
+            onDismiss = { editingPartnerBirthday = false },
+            onConfirm = {
+                store.partnerBirthday = it
+                editingPartnerBirthday = false
+            }
+        )
+    }
 }
 
 @Composable
@@ -509,8 +569,35 @@ private fun SyncDialog(
 }
 
 @Composable
-private fun rememberDialogBackdrop() =
-    com.kyant.backdrop.backdrops.rememberCanvasBackdrop { }
+private fun EditableInfoRow(label: String, value: String, onClick: () -> Unit) {
+    val colors = LocalLoveColors.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            color = colors.textSecondary,
+            fontSize = 13.sp,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = value,
+            color = colors.text,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium
+        )
+        Text(
+            text = "›",
+            color = colors.textTertiary,
+            fontSize = 15.sp,
+            modifier = Modifier.padding(start = 6.dp)
+        )
+    }
+}
 
 @Composable
 private fun InfoRow(label: String, value: String) {
