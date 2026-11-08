@@ -8,16 +8,20 @@ my_lover backend
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import secrets
 import sqlite3
 import string
+import threading
 import time
 import uuid
+from collections import defaultdict, deque
 from typing import Any, Dict, Optional, Tuple
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -34,6 +38,41 @@ CRASH_TOKEN = os.environ.get("CRASH_TOKEN", "mylove-crash-7f3a9c")
 def check_crash_token(token: Optional[str]) -> None:
     if token != CRASH_TOKEN:
         raise HTTPException(status_code=401, detail="invalid crash token")
+
+
+def token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+# 简单的固定窗口限流：(method, path) -> (次数, 秒)
+RATE_RULES = {
+    ("POST", "/api/couples"): (10, 3600),
+    ("POST", "/api/couples/join"): (20, 600),
+    ("POST", "/api/crash"): (30, 3600),
+}
+DEFAULT_RATE = (300, 60)
+_rate_lock = threading.Lock()
+_rate_buckets: Dict[str, deque] = defaultdict(deque)
+
+
+@app.middleware("http")
+async def rate_limit(request: Request, call_next):
+    ip = request.client.host if request.client else "unknown"
+    key = f"{ip}:{request.method}:{request.url.path}"
+    now = time.time()
+    rule = RATE_RULES.get((request.method, request.url.path))
+    if rule is None:
+        rule = (DEFAULT_RATE[0], DEFAULT_RATE[1])
+        key = f"{ip}:all"
+    limit, window = rule
+    with _rate_lock:
+        bucket = _rate_buckets[key]
+        while bucket and now - bucket[0] > window:
+            bucket.popleft()
+        if len(bucket) >= limit:
+            return JSONResponse({"detail": "too many requests"}, status_code=429)
+        bucket.append(now)
+    return await call_next(request)
 
 
 def db() -> sqlite3.Connection:
@@ -65,6 +104,23 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_members_couple ON members(couple_id);
             """
         )
+        # 已有库升级：把明文 token 迁移为哈希
+        rows = conn.execute("SELECT token FROM members").fetchall()
+        for row in rows:
+            value = row["token"]
+            if len(value) != 64 or any(c not in "0123456789abcdef" for c in value):
+                conn.execute(
+                    "UPDATE members SET token = ? WHERE token = ?",
+                    (token_hash(value), value),
+                )
+        # 角色唯一约束（并发加入也不会出现两个 b）
+        try:
+            conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_members_role "
+                "ON members(couple_id, role)"
+            )
+        except sqlite3.IntegrityError:
+            pass
 
 
 init_db()
@@ -108,7 +164,9 @@ def authenticate(authorization: Optional[str]) -> Tuple[sqlite3.Row, sqlite3.Row
     token = authorization.split(" ", 1)[1].strip()
     conn = db()
     try:
-        member = conn.execute("SELECT * FROM members WHERE token = ?", (token,)).fetchone()
+        member = conn.execute(
+            "SELECT * FROM members WHERE token = ?", (token_hash(token),)
+        ).fetchone()
         if member is None:
             raise HTTPException(status_code=401, detail="invalid token")
         couple = conn.execute(
@@ -136,6 +194,23 @@ class JoinCouple(BaseModel):
 
 class StatePatch(BaseModel):
     state: Dict[str, Any]
+
+
+ALLOWED_STATE_KEYS = {
+    "start_date",
+    "names",
+    "birthdays",
+    "pet",
+    "miss",
+    "moods",
+    "daily",
+    "quiz",
+    "quiz_custom",
+    "notes",
+    "period_enc",
+    "love_note",
+    "love_note_by",
+}
 
 
 class CrashReport(BaseModel):
@@ -222,7 +297,7 @@ def create_couple(body: CreateCouple) -> Dict[str, Any]:
         conn.execute(
             "INSERT INTO members (token, couple_id, role, name, created_at, last_seen) "
             "VALUES (?, ?, 'a', ?, ?, ?)",
-            (token, couple_id, body.name.strip(), now, now),
+            (token_hash(token), couple_id, body.name.strip(), now, now),
         )
         conn.commit()
         couple = conn.execute("SELECT * FROM couples WHERE id = ?", (couple_id,)).fetchone()
@@ -254,11 +329,14 @@ def join_couple(body: JoinCouple) -> Dict[str, Any]:
         role = "b"
 
         token = secrets.token_urlsafe(32)
-        conn.execute(
-            "INSERT INTO members (token, couple_id, role, name, created_at, last_seen) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (token, couple["id"], role, body.name.strip(), now, now),
-        )
+        try:
+            conn.execute(
+                "INSERT INTO members (token, couple_id, role, name, created_at, last_seen) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (token_hash(token), couple["id"], role, body.name.strip(), now, now),
+            )
+        except sqlite3.IntegrityError:
+            raise HTTPException(status_code=409, detail="this couple is already full")
         state = json.loads(couple["state"])
         state.setdefault("names", {})
         state["names"]["b"] = body.name.strip()
@@ -289,8 +367,11 @@ def put_state(
     authorization: Optional[str] = Header(default=None),
 ) -> Dict[str, Any]:
     member, couple = authenticate(authorization)
+    patch = {key: value for key, value in body.state.items() if key in ALLOWED_STATE_KEYS}
+    if len(json.dumps(patch, ensure_ascii=False)) > 64 * 1024:
+        raise HTTPException(status_code=413, detail="state too large")
     state = json.loads(couple["state"])
-    merge_state(state, body.state)
+    merge_state(state, patch)
     now = int(time.time())
     conn = db()
     try:
@@ -328,3 +409,16 @@ def miss(authorization: Optional[str] = Header(default=None)) -> Dict[str, Any]:
         return couple_payload(couple, role)
     finally:
         conn.close()
+
+
+@app.delete("/api/members/me")
+def revoke_me(authorization: Optional[str] = Header(default=None)) -> Dict[str, Any]:
+    """吊销当前设备的 token（退出/换机时用）。"""
+    member, _ = authenticate(authorization)
+    conn = db()
+    try:
+        conn.execute("DELETE FROM members WHERE token = ?", (member["token"],))
+        conn.commit()
+    finally:
+        conn.close()
+    return {"ok": True}
