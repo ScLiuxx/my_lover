@@ -510,7 +510,14 @@ fun MeScreen(
                     fontWeight = FontWeight.SemiBold
                 )
                 Spacer(Modifier.height(12.dp))
-                InfoRow("版本", "1.0")
+                val versionName = remember {
+                    runCatching {
+                        context.packageManager
+                            .getPackageInfo(context.packageName, 0)
+                            .versionName
+                    }.getOrNull() ?: "1.0.1"
+                }
+                InfoRow("版本", versionName)
                 HairLine(Modifier.padding(vertical = 10.dp))
                 InfoRow("界面", "Liquid Glass · Backdrop")
                 HairLine(Modifier.padding(vertical = 10.dp))
