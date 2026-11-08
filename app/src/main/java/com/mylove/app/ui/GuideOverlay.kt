@@ -1,20 +1,16 @@
 package com.mylove.app.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -28,7 +24,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.kyant.shapes.Capsule
 
 private data class GuideStep(
     val emoji: String,
@@ -44,7 +39,7 @@ private val guideSteps = listOf(
 )
 
 /**
- * 首次进入主界面后的新手引导，可跳过，也可以从「我的」重新观看。
+ * 首次进入主界面后的新手引导。卡片与按钮沿用统一弹层样式，可跳过，也能从「我的」重看。
  */
 @Composable
 fun GuideOverlay(onFinish: () -> Unit, modifier: Modifier = Modifier) {
@@ -60,30 +55,14 @@ fun GuideOverlay(onFinish: () -> Unit, modifier: Modifier = Modifier) {
             .clickable(interactionSource = null, indication = null) { },
         contentAlignment = Alignment.Center
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 28.dp)
-                .clip(RoundedCornerShape(28.dp))
-                .background(if (colors.isDark) Color(0xFF2A211F) else Color(0xFFFFFCFA))
-                .border(1.dp, colors.stroke, RoundedCornerShape(28.dp))
-                .padding(22.dp)
+        ModalCard(
+            modifier = Modifier.padding(horizontal = 28.dp)
         ) {
-            Text(text = step.emoji, fontSize = 40.sp)
-            Spacer(Modifier.height(10.dp))
-            Text(
-                text = step.title,
-                color = colors.text,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = step.body,
-                color = colors.textSecondary,
-                fontSize = 14.sp,
-                lineHeight = 21.sp
-            )
+            Text(text = step.emoji, fontSize = 34.sp)
+            Spacer(Modifier.height(8.dp))
+            DialogTitle(step.title)
+            Spacer(Modifier.height(4.dp))
+            DialogBody(step.body)
             Spacer(Modifier.height(18.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 guideSteps.forEachIndexed { i, _ ->
@@ -106,18 +85,16 @@ fun GuideOverlay(onFinish: () -> Unit, modifier: Modifier = Modifier) {
                         .padding(vertical = 8.dp, horizontal = 4.dp)
                 )
                 Spacer(Modifier.weight(1f))
-                Box(
-                    modifier = Modifier
-                        .clip(Capsule())
-                        .background(colors.accent)
-                        .clickable {
-                            if (isLast) {
-                                onFinish()
-                            } else {
-                                index += 1
-                            }
+                GlassButton(
+                    backdrop = rememberDialogBackdrop(),
+                    onClick = {
+                        if (isLast) {
+                            onFinish()
+                        } else {
+                            index += 1
                         }
-                        .padding(horizontal = 22.dp, vertical = 10.dp)
+                    },
+                    tint = colors.accent
                 ) {
                     Text(
                         text = if (isLast) "开始使用" else "下一步",

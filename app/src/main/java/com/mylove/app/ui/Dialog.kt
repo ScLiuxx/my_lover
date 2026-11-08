@@ -28,23 +28,35 @@ import com.kyant.backdrop.backdrops.rememberCanvasBackdrop
  */
 @Composable
 fun rememberDialogBackdrop(): Backdrop = rememberCanvasBackdrop { }
+
+/**
+ * 所有弹层共用的卡片容器：统一圆角、底色、描边和内边距。
+ */
+@Composable
+fun ModalCard(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    val colors = LocalLoveColors.current
+    val shape = RoundedCornerShape(28.dp)
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(if (colors.isDark) Color(0xFF2A211F) else Color(0xFFFFFCFA))
+            .border(1.dp, colors.stroke, shape)
+            .padding(22.dp),
+        content = content
+    )
+}
+
 @Composable
 fun LoveDialog(
     onDismiss: () -> Unit,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val colors = LocalLoveColors.current
-    val shape = RoundedCornerShape(28.dp)
     Dialog(onDismissRequest = onDismiss) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(shape)
-                .background(if (colors.isDark) Color(0xFF2A211F) else Color(0xFFFFFCFA))
-                .border(1.dp, colors.stroke, shape)
-                .padding(22.dp),
-            content = content
-        )
+        ModalCard(content = content)
     }
 }
 
