@@ -61,7 +61,9 @@ import com.mylove.app.ui.LoveTextField
 import com.mylove.app.ui.MonthDayDialog
 import com.mylove.app.ui.PageHeader
 import com.mylove.app.ui.rememberDialogBackdrop
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private val themeOptions = listOf("跟随系统", "浅色", "深色")
 
@@ -435,11 +437,13 @@ fun MeScreen(
                             onClick = {
                                 scope.launch {
                                     syncing = true
-                                    val result = SyncClient.push(
-                                        store.syncServer,
-                                        store.syncToken,
-                                        store.buildRemoteState()
-                                    )
+                                    val result = withContext(Dispatchers.IO) {
+                                        SyncClient.push(
+                                            store.syncServer,
+                                            store.syncToken,
+                                            store.buildRemoteState()
+                                        )
+                                    }
                                     syncMessage = if (result.success) {
                                         "已上传到服务器"
                                     } else {
@@ -736,11 +740,13 @@ private fun SyncDialog(
                                 body.optJSONObject("state")?.let { store.applyRemoteState(it) }
                                 onResult("已加入房间 ${body.optString("invite_code")}")
                             } else {
-                                SyncClient.push(
-                                    store.syncServer,
-                                    store.syncToken,
-                                    store.buildRemoteState()
-                                )
+                                withContext(Dispatchers.IO) {
+                                    SyncClient.push(
+                                        store.syncServer,
+                                        store.syncToken,
+                                        store.buildRemoteState()
+                                    )
+                                }
                                 onResult("已创建房间 ${body.optString("invite_code")}，把邀请码发给 TA")
                             }
                             onDismiss()

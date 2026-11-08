@@ -17,6 +17,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.mylove.app.data.LoveStore
+import com.mylove.app.data.SyncClient
 import com.mylove.app.notify.LoveNotifications
 import com.mylove.app.notify.PartnerPollScheduler
 import com.mylove.app.notify.PartnerSync
@@ -30,6 +31,7 @@ import com.mylove.app.ui.screens.MeScreen
 import com.mylove.app.ui.screens.TogetherScreen
 import com.mylove.app.ui.screens.UsScreen
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 @Composable
@@ -76,6 +78,42 @@ fun MyLoveApp() {
                 withContext(Dispatchers.IO) {
                     runCatching { PartnerSync.check(context) }
                 }
+            }
+        }
+
+        // 本地数据变化后自动上传，让对方的通知能及时触发
+        LaunchedEffect(
+            store.missMe,
+            store.dailyAnswerToday,
+            store.myMood,
+            store.loveNote,
+            store.myQuizAnswers,
+            store.customQuestions,
+            store.food,
+            store.joy,
+            store.energy,
+            store.growth,
+            store.coins,
+            store.periodChangedAt
+        ) {
+            if (!store.isConfigured || !store.isSynced) return@LaunchedEffect
+            delay(1500)
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    SyncClient.push(store.syncServer, store.syncToken, store.buildRemoteState())
+                }
+            }
+        }
+
+        // 前台每分钟拉一次，保证首页/宠物等展示是对方的最新数据
+        LaunchedEffect(store.syncToken) {
+            if (!store.isConfigured || !store.isSynced) return@LaunchedEffect
+            while (true) {
+                val result = withContext(Dispatchers.IO) {
+                    SyncClient.pull(store.syncServer, store.syncToken)
+                }
+                result.body?.optJSONObject("state")?.let { store.applyRemoteState(it) }
+                delay(60_000)
             }
         }
 

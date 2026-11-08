@@ -39,6 +39,7 @@ import com.mylove.app.data.buildPrediction
 import com.mylove.app.data.cnDate
 import com.mylove.app.data.cnShort
 import com.mylove.app.data.periodDaysInMonth
+import com.mylove.app.data.safeAtYear
 import com.mylove.app.ui.DialogBody
 import com.mylove.app.ui.DialogTitle
 import com.mylove.app.ui.GlassButton
@@ -445,8 +446,8 @@ private fun buildEvents(
     if (anniversary != null) {
         add(anniversary, DayEvent("❤️", "在一起纪念日"))
     }
-    meBirthday?.let { add(it.atYear(month.year), DayEvent("🎂", "$meName 生日")) }
-    partnerBirthday?.let { add(it.atYear(month.year), DayEvent("🎂", "$partnerName 生日")) }
+    meBirthday?.let { add(it.safeAtYear(month.year), DayEvent("🎂", "$meName 生日")) }
+    partnerBirthday?.let { add(it.safeAtYear(month.year), DayEvent("🎂", "$partnerName 生日")) }
 
     var hundred = 100L
     while (true) {

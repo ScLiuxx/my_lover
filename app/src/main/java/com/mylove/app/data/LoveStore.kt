@@ -3,6 +3,7 @@ package com.mylove.app.data
 import android.content.SharedPreferences
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import org.json.JSONArray
@@ -27,6 +28,7 @@ private const val KEY_MISS_ME = "miss_me"
 private const val KEY_MISS_TA = "miss_ta"
 private const val KEY_MY_MOOD = "my_mood"
 private const val KEY_DAILY_ANSWER = "daily_answer"
+private const val KEY_DAILY_DATE = "daily_answer_date"
 private const val KEY_LOVE_NOTE = "love_note"
 private const val KEY_LAST_OPEN = "last_open"
 private const val KEY_CONFIGURED = "configured"
@@ -42,6 +44,7 @@ private const val KEY_MY_QUIZ = "my_quiz"
 private const val KEY_PERIOD_STARTS = "period_starts"
 private const val KEY_CYCLE = "cycle_length"
 private const val KEY_PERIOD_LEN = "period_length"
+private const val KEY_PERIOD_UPDATED = "period_updated_at"
 private const val KEY_GUIDE_SEEN = "guide_seen"
 private const val KEY_ACTION_DATE = "action_date"
 private const val KEY_TOUCH = "touch_count"
@@ -233,8 +236,17 @@ class LoveStore(private val prefs: SharedPreferences) {
         get() = _dailyAnswer
         set(value) {
             _dailyAnswer = value
-            prefs.edit().putString(KEY_DAILY_ANSWER, value).apply()
+            val today = LocalDate.now().toString()
+            _dailyAnswerDate = today
+            prefs.edit()
+                .putString(KEY_DAILY_ANSWER, value)
+                .putString(KEY_DAILY_DATE, today)
+                .apply()
         }
+
+    private var _dailyAnswerDate by mutableStateOf(prefs.getString(KEY_DAILY_DATE, "")!!)
+    val dailyAnswerToday: String
+        get() = if (_dailyAnswerDate == LocalDate.now().toString()) _dailyAnswer else ""
 
     private var _loveNote by mutableStateOf(prefs.getString(KEY_LOVE_NOTE, "")!!)
     var loveNote: String
@@ -341,11 +353,21 @@ class LoveStore(private val prefs: SharedPreferences) {
         val cleaned = (periodStarts + date).distinct().sorted().takeLast(24)
         _periodStartsRaw = cleaned.joinToString(",") { it.toEpochDay().toString() }
         prefs.edit().putString(KEY_PERIOD_STARTS, _periodStartsRaw).apply()
+        touchPeriod()
     }
 
     fun clearPeriods() {
         _periodStartsRaw = ""
         prefs.edit().putString(KEY_PERIOD_STARTS, "").apply()
+        touchPeriod()
+    }
+
+    private var _periodUpdatedAt by mutableLongStateOf(prefs.getLong(KEY_PERIOD_UPDATED, 0L))
+    val periodChangedAt: Long get() = _periodUpdatedAt
+
+    private fun touchPeriod() {
+        _periodUpdatedAt = System.currentTimeMillis()
+        prefs.edit().putLong(KEY_PERIOD_UPDATED, _periodUpdatedAt).apply()
     }
 
     private var _periodPassword by mutableStateOf(prefs.getString(KEY_PERIOD_PASSWORD, "")!!)
@@ -360,10 +382,12 @@ class LoveStore(private val prefs: SharedPreferences) {
         put("starts", JSONArray(periodStarts.map { it.toEpochDay() }))
         put("cycle", cycleLength)
         put("period", periodLength)
-        put("updated", System.currentTimeMillis())
+        put("updated", _periodUpdatedAt)
     }
 
     private fun applyPeriodPayload(json: JSONObject) {
+        val remoteUpdated = json.optLong("updated", 0L)
+        if (remoteUpdated in 1.._periodUpdatedAt) return
         json.optJSONArray("starts")?.let { array ->
             val days = (0 until array.length()).mapNotNull { index ->
                 runCatching { LocalDate.ofEpochDay(array.getLong(index)) }.getOrNull()
@@ -373,22 +397,28 @@ class LoveStore(private val prefs: SharedPreferences) {
         }
         json.optInt("cycle", 0).takeIf { it in 20..45 }?.let { cycleLength = it }
         json.optInt("period", 0).takeIf { it in 2..10 }?.let { periodLength = it }
+        if (remoteUpdated > 0) {
+            _periodUpdatedAt = remoteUpdated
+            prefs.edit().putLong(KEY_PERIOD_UPDATED, remoteUpdated).apply()
+        }
     }
 
-    private var _cycleLength by mutableIntStateOf(prefs.getInt(KEY_CYCLE, 28))
+    private var _cycleLength by mutableIntStateOf(prefs.getInt(KEY_CYCLE, 28).coerceIn(20, 45))
     var cycleLength: Int
         get() = _cycleLength
         set(value) {
             _cycleLength = value.coerceIn(20, 45)
             prefs.edit().putInt(KEY_CYCLE, _cycleLength).apply()
+            touchPeriod()
         }
 
-    private var _periodLength by mutableIntStateOf(prefs.getInt(KEY_PERIOD_LEN, 5))
+    private var _periodLength by mutableIntStateOf(prefs.getInt(KEY_PERIOD_LEN, 5).coerceIn(2, 10))
     var periodLength: Int
         get() = _periodLength
         set(value) {
             _periodLength = value.coerceIn(2, 10)
             prefs.edit().putInt(KEY_PERIOD_LEN, _periodLength).apply()
+            touchPeriod()
         }
 
     // ---- 默契问答 ----
@@ -552,7 +582,7 @@ class LoveStore(private val prefs: SharedPreferences) {
             )
             put("miss", JSONObject().put(meKey, missMe).put(partnerKey, missTa))
             put("moods", JSONObject().put(meKey, myMood ?: JSONObject.NULL))
-            put("daily", JSONObject().put(meKey, dailyAnswer))
+            put("daily", JSONObject().put(meKey, "${LocalDate.now()}|$dailyAnswerToday"))
             put("quiz", JSONObject().put(meKey, JSONObject(myQuizAnswers)))
             put("quiz_custom", JSONObject().put(meKey, JSONArray(encodeQuestions(customQuestions))))
             put("love_note", loveNote)
@@ -603,8 +633,17 @@ class LoveStore(private val prefs: SharedPreferences) {
         }
 
         state.optJSONObject("daily")?.let { daily ->
-            daily.optString(meKey).takeIf { it.isNotBlank() }?.let { dailyAnswer = it }
-            _partnerDaily = daily.optString(partnerKey)
+            val todayKey = LocalDate.now().toString()
+            val mine = daily.optString(meKey)
+            if (mine.startsWith("$todayKey|")) {
+                dailyAnswer = mine.removePrefix("$todayKey|")
+            }
+            val partnerRaw = daily.optString(partnerKey)
+            _partnerDaily = if (partnerRaw.startsWith("$todayKey|")) {
+                partnerRaw.removePrefix("$todayKey|")
+            } else {
+                ""
+            }
         }
 
         state.optJSONObject("quiz")?.optJSONObject(partnerKey)?.let { partnerQuiz ->

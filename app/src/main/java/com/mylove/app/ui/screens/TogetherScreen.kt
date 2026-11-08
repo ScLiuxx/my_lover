@@ -47,6 +47,7 @@ import com.mylove.app.data.PetCatalog
 import com.mylove.app.data.QuizQuestion
 import com.mylove.app.data.QuizQuestions
 import com.mylove.app.data.cnShort
+import com.mylove.app.data.dailyQuestionFor
 import com.mylove.app.data.daysTogether
 import com.mylove.app.data.formatAgo
 import com.mylove.app.data.nextHundredDay
@@ -86,6 +87,7 @@ fun TogetherScreen(
     modifier: Modifier = Modifier
 ) {
     var dialog by remember { mutableStateOf<TogetherDialog?>(null) }
+    val dailyQuestion = dailyQuestionFor()
 
     LazyColumn(
         modifier = modifier
@@ -106,7 +108,8 @@ fun TogetherScreen(
         }
         item {
             DailyQuestionCard(
-                answer = store.dailyAnswer,
+                question = dailyQuestion,
+                answer = store.dailyAnswerToday,
                 partnerAnswer = store.partnerDailyAnswer,
                 backdrop = backdrop,
                 onAnswer = { dialog = TogetherDialog.Daily }
@@ -132,7 +135,11 @@ fun TogetherScreen(
 
     when (dialog) {
         TogetherDialog.Report -> ReportDialog(store = store, onDismiss = { dialog = null })
-        TogetherDialog.Daily -> DailyDialog(store = store, onDismiss = { dialog = null })
+        TogetherDialog.Daily -> DailyDialog(
+            store = store,
+            question = dailyQuestion,
+            onDismiss = { dialog = null }
+        )
         TogetherDialog.Food -> FoodDialog(onDismiss = { dialog = null })
         TogetherDialog.Quiz -> QuizDialog(store = store, onDismiss = { dialog = null })
         TogetherDialog.Note -> NoteDialog(store = store, onDismiss = { dialog = null })
@@ -181,6 +188,7 @@ private fun ReportCard(
 
 @Composable
 private fun DailyQuestionCard(
+    question: String,
     answer: String,
     partnerAnswer: String,
     backdrop: Backdrop,
@@ -207,7 +215,7 @@ private fun DailyQuestionCard(
         }
         Spacer(Modifier.height(10.dp))
         Text(
-            text = "今天最想对我抱怨的？",
+            text = question,
             color = colors.text,
             fontSize = 15.sp,
             fontWeight = FontWeight.Medium
@@ -712,13 +720,17 @@ private fun ReportRow(label: String, value: String) {
 }
 
 @Composable
-private fun DailyDialog(store: LoveStore, onDismiss: () -> Unit) {
+private fun DailyDialog(
+    store: LoveStore,
+    question: String,
+    onDismiss: () -> Unit
+) {
     val colors = LocalLoveColors.current
-    var text by remember { mutableStateOf(store.dailyAnswer) }
+    var text by remember { mutableStateOf(store.dailyAnswerToday) }
     LoveDialog(onDismiss = onDismiss) {
         DialogTitle("每日一问")
         Spacer(Modifier.height(6.dp))
-        DialogBody("今天最想对我抱怨的？")
+        DialogBody(question)
         Spacer(Modifier.height(14.dp))
         LoveTextField(
             value = text,

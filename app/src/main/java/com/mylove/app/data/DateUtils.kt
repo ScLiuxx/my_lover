@@ -21,6 +21,10 @@ fun LocalDate.cnShort(): String = "${monthValue}月${dayOfMonth}日"
 
 fun MonthDay.cnShort(): String = "${monthValue}月${dayOfMonth}日"
 
+/** 2 月 29 日在非闰年回退到 2 月 28 日，避免抛异常。 */
+fun MonthDay.safeAtYear(year: Int): LocalDate =
+    runCatching { atYear(year) }.getOrElse { LocalDate.of(year, 2, 28) }
+
 fun daysTogether(start: LocalDate, today: LocalDate = LocalDate.now()): Long =
     ChronoUnit.DAYS.between(start, today)
 
@@ -28,8 +32,8 @@ fun daysUntil(date: LocalDate, today: LocalDate = LocalDate.now()): Long =
     ChronoUnit.DAYS.between(today, date)
 
 fun MonthDay.nextOccurrence(today: LocalDate = LocalDate.now()): LocalDate {
-    var date = atYear(today.year)
-    if (date.isBefore(today)) date = atYear(today.year + 1)
+    var date = safeAtYear(today.year)
+    if (date.isBefore(today)) date = safeAtYear(today.year + 1)
     return date
 }
 
