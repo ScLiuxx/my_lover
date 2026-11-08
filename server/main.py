@@ -131,6 +131,13 @@ class StatePatch(BaseModel):
     state: Dict[str, Any]
 
 
+class CrashReport(BaseModel):
+    device: str = ""
+    android: str = ""
+    version: str = ""
+    stack: str
+
+
 def couple_payload(couple: sqlite3.Row, role: str) -> Dict[str, Any]:
     return {
         "couple_id": couple["id"],
@@ -151,6 +158,36 @@ def health() -> Dict[str, Any]:
     with db() as conn:
         couples = conn.execute("SELECT COUNT(*) AS c FROM couples").fetchone()["c"]
     return {"status": "ok", "couples": couples, "time": int(time.time())}
+
+
+@app.post("/api/crash")
+def report_crash(body: CrashReport) -> Dict[str, Any]:
+    record = {
+        "time": int(time.time()),
+        "device": body.device,
+        "android": body.android,
+        "version": body.version,
+        "stack": body.stack[-6000:],
+    }
+    with open(os.path.join(DATA_DIR, "crashes.log"), "a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    return {"ok": True}
+
+
+@app.get("/api/crash/latest")
+def latest_crashes() -> Dict[str, Any]:
+    path = os.path.join(DATA_DIR, "crashes.log")
+    if not os.path.exists(path):
+        return {"items": []}
+    with open(path, "r", encoding="utf-8") as f:
+        lines = f.read().splitlines()[-10:]
+    items = []
+    for line in lines:
+        try:
+            items.append(json.loads(line))
+        except Exception:
+            continue
+    return {"items": items}
 
 
 @app.post("/api/couples")

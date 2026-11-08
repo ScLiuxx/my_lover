@@ -2,6 +2,7 @@ package com.mylove.app
 
 import android.app.Application
 import android.util.Log
+import com.mylove.app.notify.CrashReporter
 import java.io.File
 
 /**
@@ -22,5 +23,9 @@ class MyLoveApplication : Application() {
             }
             previous?.uncaughtException(thread, throwable)
         }
+
+        Thread {
+            runCatching { CrashReporter.uploadPending(this) }
+        }.start()
     }
 }
