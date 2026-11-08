@@ -252,6 +252,17 @@ class LoveStore(private val prefs: SharedPreferences) {
             prefs.edit().putLong(KEY_LAST_OPEN, value).apply()
         }
 
+    // ---- 每日任务（必须在 init 之前初始化，init 会重置当日计数）----
+
+    private var _touchToday by mutableIntStateOf(prefs.getInt(KEY_TOUCH, 0))
+    val touchToday: Int get() = _touchToday
+
+    private var _playToday by mutableIntStateOf(prefs.getInt(KEY_PLAY, 0))
+    val playToday: Int get() = _playToday
+
+    private var _taskRewardDate by mutableStateOf(prefs.getString(KEY_TASK_REWARD, "")!!)
+    val taskRewardDone: Boolean get() = _taskRewardDate == LocalDate.now().toString()
+
     val petLevel: Int get() = (growth / 20).coerceIn(0, 5) + 1
     val petForm: String get() = petSpec.form
     val feedLimit: Int get() = 3
@@ -412,16 +423,7 @@ class LoveStore(private val prefs: SharedPreferences) {
     private var _partnerDaily by mutableStateOf("")
     val partnerDailyAnswer: String get() = _partnerDaily
 
-    // ---- 每日任务 ----
-
-    private var _touchToday by mutableIntStateOf(prefs.getInt(KEY_TOUCH, 0))
-    val touchToday: Int get() = _touchToday
-
-    private var _playToday by mutableIntStateOf(prefs.getInt(KEY_PLAY, 0))
-    val playToday: Int get() = _playToday
-
-    private var _taskRewardDate by mutableStateOf(prefs.getString(KEY_TASK_REWARD, "")!!)
-    val taskRewardDone: Boolean get() = _taskRewardDate == LocalDate.now().toString()
+    // ---- 新手引导 ----
 
     private var _guideSeen by mutableStateOf(prefs.getBoolean(KEY_GUIDE_SEEN, false))
     var guideSeen: Boolean
