@@ -31,8 +31,7 @@ object PartnerSync {
         val daily = state.optJSONObject("daily")?.optString(partnerKey) ?: ""
         val mood = state.optJSONObject("moods")?.optString(partnerKey)
             ?.takeIf { it.isNotBlank() && it != "null" } ?: ""
-        val note = state.optString("love_note")
-        val noteBy = state.optString("love_note_by")
+        val note = state.optJSONObject("notes")?.optString(partnerKey) ?: ""
 
         val current = JSONObject().apply {
             put("miss", miss)
@@ -92,7 +91,7 @@ object PartnerSync {
             )
         }
 
-        if (note.isNotBlank() && note != old.optString("note") && noteBy == partnerKey) {
+        if (note.isNotBlank() && note != old.optString("note")) {
             LoveNotifications.notifyEvent(
                 context,
                 2005,

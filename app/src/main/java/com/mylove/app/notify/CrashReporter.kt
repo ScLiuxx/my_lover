@@ -13,6 +13,7 @@ import java.net.URL
 object CrashReporter {
 
     private const val ENDPOINT = "http://123.249.80.35/api/crash"
+    private const val CRASH_TOKEN = "mylove-crash-7f3a9c"
 
     fun uploadPending(context: Context) {
         val file = File(context.filesDir, "last_crash.txt")
@@ -39,6 +40,7 @@ object CrashReporter {
                 readTimeout = 6000
                 doOutput = true
                 setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                setRequestProperty("X-Crash-Token", CRASH_TOKEN)
             }
             connection!!.outputStream.use {
                 it.write(body.toString().toByteArray(Charsets.UTF_8))

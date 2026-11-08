@@ -453,6 +453,9 @@ class LoveStore(private val prefs: SharedPreferences) {
     private var _partnerDaily by mutableStateOf("")
     val partnerDailyAnswer: String get() = _partnerDaily
 
+    private var _partnerNote by mutableStateOf("")
+    val partnerNote: String get() = _partnerNote
+
     // ---- 新手引导 ----
 
     private var _guideSeen by mutableStateOf(prefs.getBoolean(KEY_GUIDE_SEEN, false))
@@ -585,8 +588,7 @@ class LoveStore(private val prefs: SharedPreferences) {
             put("daily", JSONObject().put(meKey, "${LocalDate.now()}|$dailyAnswerToday"))
             put("quiz", JSONObject().put(meKey, JSONObject(myQuizAnswers)))
             put("quiz_custom", JSONObject().put(meKey, JSONArray(encodeQuestions(customQuestions))))
-            put("love_note", loveNote)
-            put("love_note_by", meKey)
+            put("notes", JSONObject().put(meKey, loveNote))
             PeriodCrypto.encrypt(periodPassword, periodPayload().toString(), syncCoupleId)?.let {
                 put("period_enc", it)
             }
@@ -660,6 +662,8 @@ class LoveStore(private val prefs: SharedPreferences) {
             }
         }
 
-        state.optString("love_note").takeIf { it.isNotBlank() }?.let { loveNote = it }
+        state.optJSONObject("notes")?.let { notes ->
+            _partnerNote = notes.optString(partnerKey)
+        }
     }
 }

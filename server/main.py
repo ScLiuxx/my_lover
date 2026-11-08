@@ -28,6 +28,13 @@ os.makedirs(DATA_DIR, exist_ok=True)
 
 app = FastAPI(title="my_lover API", version="1.0.0")
 
+CRASH_TOKEN = os.environ.get("CRASH_TOKEN", "mylove-crash-7f3a9c")
+
+
+def check_crash_token(token: Optional[str]) -> None:
+    if token != CRASH_TOKEN:
+        raise HTTPException(status_code=401, detail="invalid crash token")
+
 
 def db() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH, timeout=10)
@@ -161,7 +168,11 @@ def health() -> Dict[str, Any]:
 
 
 @app.post("/api/crash")
-def report_crash(body: CrashReport) -> Dict[str, Any]:
+def report_crash(
+    body: CrashReport,
+    x_crash_token: Optional[str] = Header(default=None),
+) -> Dict[str, Any]:
+    check_crash_token(x_crash_token)
     record = {
         "time": int(time.time()),
         "device": body.device,
@@ -175,7 +186,10 @@ def report_crash(body: CrashReport) -> Dict[str, Any]:
 
 
 @app.get("/api/crash/latest")
-def latest_crashes() -> Dict[str, Any]:
+def latest_crashes(
+    x_crash_token: Optional[str] = Header(default=None),
+) -> Dict[str, Any]:
+    check_crash_token(x_crash_token)
     path = os.path.join(DATA_DIR, "crashes.log")
     if not os.path.exists(path):
         return {"items": []}

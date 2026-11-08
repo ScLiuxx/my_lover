@@ -484,10 +484,10 @@ private fun MiniAppGrid(
             MiniAppCard(
                 emoji = "💌",
                 title = "情话",
-                subtitle = if (store.loveNote.isBlank()) {
-                    "写一句只给 TA 看"
-                } else {
-                    "你写过：${store.loveNote.take(12)}"
+                subtitle = when {
+                    store.loveNote.isNotBlank() -> "你写过：${store.loveNote.take(12)}"
+                    store.partnerNote.isNotBlank() -> "TA 写给你：${store.partnerNote.take(10)}"
+                    else -> "写一句只给 TA 看"
                 },
                 backdrop = backdrop,
                 modifier = Modifier.weight(1f),
@@ -1018,6 +1018,14 @@ private fun NoteDialog(store: LoveStore, onDismiss: () -> Unit) {
             onValueChange = { text = it },
             placeholder = "今天也很喜欢你"
         )
+        if (store.partnerNote.isNotBlank()) {
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = "TA 写给你：${store.partnerNote}",
+                color = colors.textSecondary,
+                fontSize = 12.sp
+            )
+        }
         Spacer(Modifier.height(16.dp))
         GlassButton(
             backdrop = com.kyant.backdrop.backdrops.rememberCanvasBackdrop { },
